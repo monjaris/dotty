@@ -5,7 +5,7 @@ set_plat("linux")
 --- RULES/POLICIES
 add_rules("mode.debug", "mode.release"); set_defaultmode("debug")
 add_rules("plugin.compile_commands.autoupdate")
-set_policy("build.progress_style", "multirow")
+-- set_policy("build.progress_style", "multirow")
 -- add_rules("c++.unity_build")
 
 
@@ -16,6 +16,7 @@ toolchain("dotty.gnu")
     set_toolset("ld",    "g++"); set_toolset("sh",    "g++")
     set_toolset("ex",    "g++"); set_toolset("strip", "strip")
 toolchain_end()
+
 
 toolchain("dotty.llvm")
     set_kind("standalone"); set_toolset("cxx", "clang++");

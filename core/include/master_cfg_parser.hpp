@@ -2,8 +2,8 @@
 #include "config_parser.hpp"
 
 
-// methods with 'r*' are config readers,
-// whereas 'w*' ones are config writerss.
+// methods with 'r..' prefix are config readers,
+// whereas 'w..' ones are config writers.
 struct MasterConfigParser {
     toml::table m_table;
     std::map<std::string, std::string> vars;

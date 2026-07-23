@@ -1,28 +1,13 @@
 [
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o", "core/src/cfman.cpp"],
-  "file": "core/src/cfman.cpp"
-},
-{
-  "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o", "core/src/config_parser.cpp"],
-  "file": "core/src/config_parser.cpp"
-},
-{
-  "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o", "core/src/master_cfg_parser.cpp"],
-  "file": "core/src/master_cfg_parser.cpp"
-},
-{
-  "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o", "core/src/profile.cpp"],
-  "file": "core/src/profile.cpp"
-},
-{
-  "directory": "/home/ziya/dev/main/dotty",
   "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/exec/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/exec/linux/x86_64/debug/tests/exec.cpp.o", "tests/exec.cpp"],
   "file": "tests/exec.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/parser/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o", "tests/parser.cpp"],
+  "file": "tests/parser.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
@@ -43,4 +28,24 @@
   "directory": "/home/ziya/dev/main/dotty",
   "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/dotty/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o", "src/main.cpp"],
   "file": "src/main.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o", "core/src/config_parser.cpp"],
+  "file": "core/src/config_parser.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o", "core/src/master_cfg_parser.cpp"],
+  "file": "core/src/master_cfg_parser.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o", "core/src/profile.cpp"],
+  "file": "core/src/profile.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/g++", "-c", "-O0", "-std=c++23", "-I", "build/.objs/core/linux/x86_64/debug/include/cxx", "-include", "common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o", "core/src/cfman.cpp"],
+  "file": "core/src/cfman.cpp"
 }]

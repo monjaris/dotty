@@ -9,7 +9,7 @@ public:
 
     std::vector<Profile> m_profiles;
 
-    const fs::path HOME = cm::os::userHomePath();  // this throws on fail, nice thing
+    const fs::path HOME = cm::os::userHomePath();  // this throws exception on fail, nice thing
     fs::path config_d = HOME/cm::os::get_config_d()/"dotty";
     fs::path data_d = HOME/".local/share/dotty";
 
@@ -34,24 +34,6 @@ public:
         ProfileAlreadySet=7,
     };
 
-    // struct Msg {
-        // const char* clr;
-        // std::string val;
-        // no-color constructor
-        // template <class T>
-        // Msg(T v) : clr(""), val(std::format("{}", v)) {}
-        // colored constructor
-        // template <class T>
-        // Msg(const char* color, T v) : clr(color), val(std::format("{}", v)) {}
-    // };
-    // CF stands for ColorFul, yes
-    // #define CF(_color, _val) ::Cfman::Msg{_color, _val}
-    // void say(std::initializer_list<Msg> args) {
-        // for (auto& m : args) {
-            // if constexpr (COLORS) cm::print(m.clr, m.val, cm::NORM);
-            // else cm::print(m.val);
-        // }
-    // }
 
     Report validateProfileName(const std::string& name);
     Report validateRepoName(const std::string& repo);
@@ -59,14 +41,13 @@ public:
     bool profileExists(const strview profile_name);
     Profile* getProfileByName(const strview prof_name);
     std::string activeProf();
-    Report prerequisite(strview init_prof);
     Report newProfile(const std::string& name, const std::string& github_name,
         const std::string& repo_name, bool is_public,
         bool is_external, const char* const initial_commit_message
     );
     Report deleteProfile(const strview profile_name);
     Report setActiveProfile(const strview name);
-    Res listProfiles(bool name, bool repo, bool url, bool gh);
+    Report listProfiles(bool name, bool repo, bool url, bool gh);
     Report cleanConfigs(bool config, bool storage);
     bool detectPreinitConfig();
     Report reloadConfig();

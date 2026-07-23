@@ -63,6 +63,7 @@ set_pcxxheader("include/common.hpp")
 --- TESTS
 target("input") add_files("tests/input.cpp")
 target("exec") add_files("tests/exec.cpp")
+target("parser") add_files("tests/parser.cpp")
 
 --- TARGETS
 target("core")

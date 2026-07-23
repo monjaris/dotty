@@ -19,7 +19,7 @@ int32 CmdLine::do_init() {
     if (!cm::internet_is_connected()) {
         cm::terminate(
             "Your device is not connected to the internet!\n",
-            "Github repo initialization requires a wifi connection."
+            "Repository creation requires a wifi connection."
         );
     }
 
@@ -42,8 +42,8 @@ int32 CmdLine::do_init() {
 
     // Check github authentication status
     cm::debug("Checking GitHub CLI authentication...\n");
-    int auth_status = ::system("gh auth status --hostname github.com >" NULLDEV);
-    if (FAILED auth_status) {
+    int32 auth_failed = ::system("gh auth status --hostname github.com >" NULLDEV);
+    if (auth_failed) {
         cm::terminate("gh is not authenticated. Please run 'gh auth login' first.\n");
     } else {
         cm::debug("GitHub CLI authenticated.\n");
@@ -53,7 +53,7 @@ int32 CmdLine::do_init() {
     auto get_gh_auth = cm::CmdStream {}
         .add("gh api user --jq '.login'")
     ;
-    if (FAILED get_gh_auth.run(" && ", true)) {
+    if (get_gh_auth.run(" && ", true) != 0) {
         cm::terminate("Fetching authenticated github username failed!");
     }
     const std::string& gh_auth_name = get_gh_auth.output();
@@ -132,16 +132,18 @@ int32 CmdLine::do_update() {
     );
     if (!conf.is_open()) cm::terminate("File could not be opened!\n");
 
-    while (std::getline(conf, lexer.line)) {
+    std::string line;
+    while (std::getline(conf, line)) {
         cm::debug("Lexing config...\n");
-        lexer.lexMain();
-        cm::debug("Parsing tokens...\n");
-        parser.tokens = lexer.result();
+        lexer.feed(line);
+        lexer.lexMain().printComplains();
 #if DEBUG_ON
         cm::debug("\n\nLexed tokens:\n");
         lexer.print();
 #endif
-        parser.parseMain().printOnBad();
+        parser.feed(lexer.result());
+        cm::debug("Parsing tokens...\n");
+        parser.parseMain().printComplains();
 
         cm::debug("Loading parsed lists...\n\n");
         dotty.files_to_copy = parser.copy_files;
@@ -378,7 +380,7 @@ int32 CmdLine::do_p_list(const strview options/*= "name,repo,url,gh"*/) {
 
 _print:
     cm::print("    [ PROFILES ]\n");
-    dotty.listProfiles(name, repo, url, gh);
+    dotty.listProfiles(name, repo, url, gh).mute();
     return EXIT_SUCCESS;
 }
 
@@ -415,11 +417,11 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
     }
 
     // delete github repo
-    int32 del_gh_repo =  cm::CmdStream{}
+    int32 repo_deletion_failed =  cm::CmdStream{}
         .add("gh repo delete {}", cm::repo_from_url(dotty.getProfileByName(profile_name)->repo_url))
     .run(" && ", false);
 
-    if (FAILED del_gh_repo) {
+    if (repo_deletion_failed) {
         cm::print("Couldn't delete github repo!\n");
         if (!cm::ask_confirm("Do you want to proceed with removing directories of it anyway?")) {
             cm::terminate("Could not remove '", profile_name, "'!");
@@ -432,12 +434,12 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
     std::error_code res = {};
     //
     fs::remove_all(dotty.config_d/profile_name, res);
-    if (FAILED res.value()) {
+    if (res.value() != 0) {
          cm::print("[ERROR]: No profile config removed!\n");
     }
     //
     fs::remove_all(dotty.data_d/profile_name, res);
-    if (FAILED res.value()) {
+    if (res.value() != 0) {
         cm::print("[ERROR]: No profile storage data removed!\n");
     }
 

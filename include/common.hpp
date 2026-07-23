@@ -1,38 +1,36 @@
 #pragma once
+// general
 #include <iostream>
+#include <filesystem>
+#include <concepts>
+#include <thread>
+#include <utility>
+#include <ranges>
+// stl classes
 #include <vector>
 #include <map>
 #include <string_view>
-#include <expected>
-#include <filesystem>
-#include <fstream>
 #include <functional>
+#include <expected>
+#include <fstream>
 #include <sstream>
-#include <concepts>
-#include <utility>
-#include <thread>
+// legacy
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <wait.h>
-#include <spawn.h>
+// posix
 #include <unistd.h>
 #include <fcntl.h>
+#include <spawn.h>
+#include <sys/wait.h>
 // 3rd party
 #include "toml++/toml.hpp"
 #include "dotline/dotline.hpp"
 
 
-#define IGNORE(_comment)
-#define DOTTY_ATTR(_attribute) IGNORE(DOTTY##_attribute)
-#define UNOPTIMIZED "UNOPTIMIZED"
-
 #define NAMESPACE_START(_name) namespace _name {
 #define NAMESPACE_END(_name) }
 #define COMPTIME_STR constexpr const char* const
-#define CATSTR(_s1, _s2) _s1###_s2
-// use it only for integers, bool(true) is success
-#define FAILED (0)!=
 
 
 #if (defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__))

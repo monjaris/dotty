@@ -32,7 +32,6 @@ bool Cfman::noProfilesExist() {
 }
 
 
-DOTTY_ATTR(UNOPTIMIZED)
 bool Cfman::profileExists(const strview profile_name) {
     for (const Profile& prof : m_profiles) {
         if (prof.name == profile_name) {
@@ -58,23 +57,6 @@ Profile* Cfman::getProfileByName(const strview prof_name) {
 std::string Cfman::activeProf() {
     std::string profile_name = m_current_profile.name;
     return profile_name;
-}
-
-
-Report Cfman::prerequisite(strview init_prof) {
-    Profile* profile = getProfileByName(activeProf());
-    if (profile == nullptr) return Report::Bad("Profile couldn't be found: {}", activeProf());
-
-    if (dotty.activeProf() == Profile::NOT) {
-        return Report::Bad("Active profile is not set!\n");
-    }
-
-    // Pre-create required directories
-    cm::ensure_directories(config_d/profile->name);
-    cm::ensure_directories(data_d/profile->name);
-    cm::ensure_directories(data_d/profile->name/dotty.data_cfgref);
-
-    return Report::Good();
 }
 
 
@@ -219,7 +201,9 @@ Report Cfman::setActiveProfile(const strview name) {
 }
 
 
-Cfman::Res Cfman::listProfiles(bool name, bool repo, bool url, bool gh) {
+Report Cfman::listProfiles(bool name, bool repo, bool url, bool gh) {
+    Report rep;
+
     for (uint32 i=0;  i < m_profiles.size();  ++i) {
         auto prof = m_profiles[i];
         // if the current iterated profile is active one
@@ -241,7 +225,8 @@ Cfman::Res Cfman::listProfiles(bool name, bool repo, bool url, bool gh) {
 
         cm::print(i+1, ": ", msg ," |\n");
     }
-    return Res::OK;
+
+    return rep;
 }
 
 
@@ -371,7 +356,9 @@ void Cfman::load(bool reg) {
 
 
 // Copy all source files to destination files, pairs defined by a member
-std::array<std::vector<SrcDest>, 4> Cfman::systemToRepo() {
+std::array<std::vector<SrcDest>, 4>
+Cfman::systemToRepo() {
+
     static std::vector<SrcDest> succeed_cp_f;
     static std::vector<SrcDest> succeed_cp_d;
     static std::vector<SrcDest> succeed_ln_f;
@@ -455,9 +442,7 @@ std::array<std::vector<SrcDest>, 4> Cfman::systemToRepo() {
         dest = repo_d / dest;
         cm::ensure_directories(dest.parent_path());
         try {
-            fs::create_directory_symlink(
-                src, dest
-            );
+            fs::create_directory_symlink(src, dest);
         } catch (const std::exception& e) {
             cm::print(ERR, e.what());
         }

@@ -13,6 +13,6 @@ build/
 *.so
 
 # Explicit
-dotty
-generate-makefile.sh
-TODO.md
+/dotty
+/generate-makefile.sh
+/TODO.md

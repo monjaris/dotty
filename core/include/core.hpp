@@ -176,7 +176,7 @@ inline bool str_has_any_of(const std::string& str, inilist<char> chars) {
 }
 
 // takes @str writes to @out only if @prefix is @str's prefix, else returns false
-inline bool prefix_strip(const std::string& str, const std::string& prefix, std::string* out) {
+inline bool prefix_strip(const std::string& str, const strview prefix, std::string* out) {
     if (str.substr(0, prefix.size()) != prefix) return false;
     if (out) *out = str.substr(prefix.size());
     return true;
@@ -529,8 +529,8 @@ struct tern {
 // contains error message and an error code
 struct [[nodiscard]]
 cm::Report {
-    bool err = false;
-    std::string msg = {};
+    bool m_err = false;
+    std::string m_msg = {};
 
     [[nodiscard]]
     static Report Good() {
@@ -543,14 +543,14 @@ cm::Report {
     }
 
     constexpr explicit inline
-        operator bool () const { return err; }
-    bool success() { return !(bool)*this; }
-    bool error()   { return (bool)*this; }
+        operator bool () const { return m_err; }
+    bool success() const { return !(bool)*this; }
+    bool error() const { return (bool)*this; }
     void mute() {}  // so that nodiscard is explicitly bypassed
 
-    void printComplains() {
-        if (!msg.empty()) {
-            cm::print(msg, "\n");
+    void printComplains() const {
+        if (!m_msg.empty()) {
+            cm::print(m_msg, "\n");
         }
     }
 
@@ -562,10 +562,11 @@ cm::Report {
 
     template <class... FmtArgs>
     void addComplain(std::format_string<FmtArgs...> complain_msg, FmtArgs&&... complain_args) {
+        m_err = true;
         std::string complain = "\n" + std::format(
             complain_msg, std::forward<FmtArgs>(complain_args)...
         );
-        msg.append(complain);
+        m_msg.append(complain);
     }
 
     void terminateOnBad() {

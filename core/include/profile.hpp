@@ -4,7 +4,7 @@
 struct SrcDest { fs::path src, dest; };
 
 struct Profile {
-    static COMPTIME_STR NOT = "[NULL-PROFILE]";
+    static COMPTIME_STR NOT = "[NIL-PROFILE]";
 
     std::string name;
     std::string repo_url;

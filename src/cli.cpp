@@ -158,6 +158,13 @@ int32 CmdLine::setup()
 
 int32 CmdLine::run()
 {
+    if (::geteuid() == (uid_t) 0) {
+        cm::terminate<EXIT_SUCCESS>(
+            "Running dotty with sudo is not a good practice!\n"
+            "Dotty only asks for sudo if per-profile configuration"
+        );
+    }
+
     std::string active_p = Profile::NOT;
     dotty.load(true);
     active_p = dotty.activeProf();

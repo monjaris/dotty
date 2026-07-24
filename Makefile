@@ -7,30 +7,38 @@ VV=@
 endif
 
 CCACHE=/usr/bin/ccache
-ZC=/usr/bin/zig
+CC=/usr/bin/gcc
+AS=/usr/bin/gcc
+GC=/usr/bin/go
 MXX=/usr/bin/g++
 RC=/usr/bin/rustc
-AS=/usr/bin/gcc
 CS=/usr/bin/dotnet
 CU=/usr/bin/clang
-GC=/usr/bin/go
 MM=/usr/bin/gcc
+ZC=/usr/bin/zig
 CXX=/usr/bin/g++
-CC=/usr/bin/gcc
 
-CS=/usr/bin/dotnet
-LD=/usr/bin/g++
-RCLD=/usr/bin/rustc
-ZCLD=/usr/bin/zig
-GCLD=/usr/bin/go
 AR=/usr/bin/ar
+GCAR=/usr/bin/go
 RCAR=/usr/bin/rustc
 ZCAR=/usr/bin/zig
-GCAR=/usr/bin/go
+LD=/usr/bin/g++
+GCLD=/usr/bin/go
+CS=/usr/bin/dotnet
+RCLD=/usr/bin/rustc
+ZCLD=/usr/bin/zig
 SH=/usr/bin/g++
 RCSH=/usr/bin/rustc
 ZCSH=/usr/bin/zig
 
+parser_LD=/usr/bin/g++
+parser_CXX=/usr/bin/g++
+parser_CXX=/usr/bin/g++
+parser_CXX=/usr/bin/g++
+core_AR=/usr/bin/ar
+core_CXX=/usr/bin/g++
+core_CXX=/usr/bin/g++
+core_CXX=/usr/bin/g++
 dotty_LD=/usr/bin/g++
 dotty_CXX=/usr/bin/g++
 dotty_CXX=/usr/bin/g++
@@ -43,15 +51,15 @@ input_LD=/usr/bin/g++
 input_CXX=/usr/bin/g++
 input_CXX=/usr/bin/g++
 input_CXX=/usr/bin/g++
-core_AR=/usr/bin/ar
-core_CXX=/usr/bin/g++
-core_CXX=/usr/bin/g++
-core_CXX=/usr/bin/g++
-parser_LD=/usr/bin/g++
-parser_CXX=/usr/bin/g++
-parser_CXX=/usr/bin/g++
-parser_CXX=/usr/bin/g++
 
+parser_CXXFLAGS=-O0 -std=c++23 -I build/.objs/parser/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
+parser_CXXFLAGS=-O0 -std=c++23 -I build/.objs/parser/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
+parser_CXXFLAGS=-O0 -std=c++23 -I build/.objs/parser/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
+parser_LDFLAGS=
+core_CXXFLAGS=-O0 -std=c++23 -I build/.objs/core/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
+core_CXXFLAGS=-O0 -std=c++23 -I build/.objs/core/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
+core_CXXFLAGS=-O0 -std=c++23 -I build/.objs/core/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
+core_ARFLAGS=-cr
 dotty_CXXFLAGS=-O0 -std=c++23 -I build/.objs/dotty/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
 dotty_CXXFLAGS=-O0 -std=c++23 -I build/.objs/dotty/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
 dotty_CXXFLAGS=-O0 -std=c++23 -I build/.objs/dotty/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
@@ -64,22 +72,50 @@ input_CXXFLAGS=-O0 -std=c++23 -I build/.objs/input/linux/x86_64/debug/include/cx
 input_CXXFLAGS=-O0 -std=c++23 -I build/.objs/input/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
 input_CXXFLAGS=-O0 -std=c++23 -I build/.objs/input/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
 input_LDFLAGS=
-core_CXXFLAGS=-O0 -std=c++23 -I build/.objs/core/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
-core_CXXFLAGS=-O0 -std=c++23 -I build/.objs/core/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
-core_CXXFLAGS=-O0 -std=c++23 -I build/.objs/core/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
-core_ARFLAGS=-cr
-parser_CXXFLAGS=-O0 -std=c++23 -I build/.objs/parser/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
-parser_CXXFLAGS=-O0 -std=c++23 -I build/.objs/parser/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
-parser_CXXFLAGS=-O0 -std=c++23 -I build/.objs/parser/linux/x86_64/debug/include/cxx -include common.hpp -Iinclude -Icore/include -Ivendor -Ideps
-parser_LDFLAGS=
 
-default:  script dotty exec input core parser
+default:  parser core dotty script exec input
 
-all:  script dotty exec input core parser
+all:  parser core dotty script exec input
 
-.PHONY: default all  script dotty exec input core parser
+.PHONY: default all  parser core dotty script exec input
 
-script:
+parser: build/linux/x86_64/debug/parser
+build/linux/x86_64/debug/parser: build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o
+	@echo linking.debug parser
+	@mkdir -p build/linux/x86_64/debug
+	$(VV)$(parser_LDFLAGS)$(parser_LD) -o build/linux/x86_64/debug/parser build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o
+
+build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o: tests/parser.cpp
+	@echo ccache compiling.debug tests/parser.cpp
+	@mkdir -p build/.objs/parser/linux/x86_64/debug/tests
+	$(VV)$(parser_CXX) -c $(parser_CXXFLAGS) -o build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o tests/parser.cpp
+
+core: build/linux/x86_64/debug/libcore.a
+build/linux/x86_64/debug/libcore.a: script build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o
+	@echo linking.debug libcore.a
+	@mkdir -p build/linux/x86_64/debug
+	$(VV)$(core_AR) $(core_ARFLAGS) build/linux/x86_64/debug/libcore.a build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o
+
+build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o: core/src/MasterConfigParser.cpp
+	@echo ccache compiling.debug core/src/MasterConfigParser.cpp
+	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
+	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o core/src/MasterConfigParser.cpp
+
+build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o: core/src/DotlangParser.cpp
+	@echo ccache compiling.debug core/src/DotlangParser.cpp
+	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
+	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o core/src/DotlangParser.cpp
+
+build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o: core/src/Profile.cpp
+	@echo ccache compiling.debug core/src/Profile.cpp
+	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
+	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o core/src/Profile.cpp
+
+build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o: core/src/ConfigManager.cpp
+	@echo ccache compiling.debug core/src/ConfigManager.cpp
+	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
+	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o core/src/ConfigManager.cpp
+
 dotty: build/linux/x86_64/debug/dotty
 build/linux/x86_64/debug/dotty: build/linux/x86_64/debug/libcore.a build/.objs/dotty/linux/x86_64/debug/src/cli.cpp.o build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o
 	@echo linking.debug dotty
@@ -101,6 +137,7 @@ build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o: src/main.cpp
 	@mkdir -p build/.objs/dotty/linux/x86_64/debug/src
 	$(VV)$(dotty_CXX) -c $(dotty_CXXFLAGS) -o build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o src/main.cpp
 
+script:
 exec: build/linux/x86_64/debug/exec
 build/linux/x86_64/debug/exec: build/.objs/exec/linux/x86_64/debug/tests/exec.cpp.o
 	@echo linking.debug exec
@@ -123,46 +160,20 @@ build/.objs/input/linux/x86_64/debug/tests/input.cpp.o: tests/input.cpp
 	@mkdir -p build/.objs/input/linux/x86_64/debug/tests
 	$(VV)$(input_CXX) -c $(input_CXXFLAGS) -o build/.objs/input/linux/x86_64/debug/tests/input.cpp.o tests/input.cpp
 
-core: build/linux/x86_64/debug/libcore.a
-build/linux/x86_64/debug/libcore.a: script build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o
-	@echo linking.debug libcore.a
-	@mkdir -p build/linux/x86_64/debug
-	$(VV)$(core_AR) $(core_ARFLAGS) build/linux/x86_64/debug/libcore.a build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o
+clean:  clean_parser clean_core clean_dotty clean_script clean_exec clean_input
 
-build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o: core/src/config_parser.cpp
-	@echo ccache compiling.debug core/src/config_parser.cpp
-	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
-	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o core/src/config_parser.cpp
+clean_parser: 
+	@rm -rf build/linux/x86_64/debug/parser
+	@rm -rf build/linux/x86_64/debug/parser.sym
+	@rm -rf build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o
 
-build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o: core/src/master_cfg_parser.cpp
-	@echo ccache compiling.debug core/src/master_cfg_parser.cpp
-	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
-	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o core/src/master_cfg_parser.cpp
-
-build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o: core/src/profile.cpp
-	@echo ccache compiling.debug core/src/profile.cpp
-	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
-	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o core/src/profile.cpp
-
-build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o: core/src/cfman.cpp
-	@echo ccache compiling.debug core/src/cfman.cpp
-	@mkdir -p build/.objs/core/linux/x86_64/debug/core/src
-	$(VV)$(core_CXX) -c $(core_CXXFLAGS) -o build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o core/src/cfman.cpp
-
-parser: build/linux/x86_64/debug/parser
-build/linux/x86_64/debug/parser: build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o
-	@echo linking.debug parser
-	@mkdir -p build/linux/x86_64/debug
-	$(VV)$(parser_LDFLAGS)$(parser_LD) -o build/linux/x86_64/debug/parser build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o
-
-build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o: tests/parser.cpp
-	@echo ccache compiling.debug tests/parser.cpp
-	@mkdir -p build/.objs/parser/linux/x86_64/debug/tests
-	$(VV)$(parser_CXX) -c $(parser_CXXFLAGS) -o build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o tests/parser.cpp
-
-clean:  clean_script clean_dotty clean_exec clean_input clean_core clean_parser
-
-clean_script: 
+clean_core:  clean_script
+	@rm -rf build/linux/x86_64/debug/libcore.a
+	@rm -rf build/linux/x86_64/debug/core.sym
+	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o
+	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o
+	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o
+	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o
 
 clean_dotty:  clean_core
 	@rm -rf build/linux/x86_64/debug/dotty
@@ -170,6 +181,8 @@ clean_dotty:  clean_core
 	@rm -rf build/.objs/dotty/linux/x86_64/debug/src/cli.cpp.o
 	@rm -rf build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o
 	@rm -rf build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o
+
+clean_script: 
 
 clean_exec: 
 	@rm -rf build/linux/x86_64/debug/exec
@@ -180,17 +193,4 @@ clean_input:
 	@rm -rf build/linux/x86_64/debug/input
 	@rm -rf build/linux/x86_64/debug/input.sym
 	@rm -rf build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
-
-clean_core:  clean_script
-	@rm -rf build/linux/x86_64/debug/libcore.a
-	@rm -rf build/linux/x86_64/debug/core.sym
-	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/config_parser.cpp.o
-	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/master_cfg_parser.cpp.o
-	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/profile.cpp.o
-	@rm -rf build/.objs/core/linux/x86_64/debug/core/src/cfman.cpp.o
-
-clean_parser: 
-	@rm -rf build/linux/x86_64/debug/parser
-	@rm -rf build/linux/x86_64/debug/parser.sym
-	@rm -rf build/.objs/parser/linux/x86_64/debug/tests/parser.cpp.o
 

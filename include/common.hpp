@@ -25,7 +25,7 @@
 #include <sys/wait.h>
 // 3rd party
 #include "toml++/toml.hpp"
-#include "dotline/dotline.hpp"
+#include "dotline/include/dotline.hpp"
 
 
 #define NAMESPACE_START(_name) namespace _name {

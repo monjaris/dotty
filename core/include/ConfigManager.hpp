@@ -1,8 +1,8 @@
 #pragma once
-#include "master_cfg_parser.hpp"
+#include "MasterConfigParser.hpp"
 
 
-class Cfman
+class ConfigManager
 {
 public:
     static constexpr bool COLORS = true;
@@ -56,4 +56,4 @@ public:
     void repoToSystem();
 };
 
-extern Cfman dotty;
+extern ConfigManager dotty;

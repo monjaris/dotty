@@ -1,5 +1,5 @@
 #pragma once
-#include "cfman.hpp"
+#include "ConfigManager.hpp"
 
 namespace CLI { class App; }
 

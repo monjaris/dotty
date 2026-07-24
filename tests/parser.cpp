@@ -1,4 +1,4 @@
-#include "../core/include/config_parser.hpp"
+#include "../core/include/DotlangParser.hpp"
 
 static const std::string source[]
 {

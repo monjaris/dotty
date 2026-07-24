@@ -1,4 +1,4 @@
-#include "profile.hpp"
+#include "Profile.hpp"
 
 Profile::Profile(
     const std::string& name,

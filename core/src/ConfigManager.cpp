@@ -1,7 +1,7 @@
-#include "cfman.hpp"
+#include "ConfigManager.hpp"
 
 
-Report Cfman::validateProfileName(const std::string& name) {
+Report ConfigManager::validateProfileName(const std::string& name) {
     if (name == Profile::NOT) {
         return Report::Bad("Profile can't be assigned to profile sentinel('{}')", Profile::NOT);
     }
@@ -18,7 +18,7 @@ Report Cfman::validateProfileName(const std::string& name) {
 }
 
 
-Report Cfman::validateRepoName(const std::string& repo) {
+Report ConfigManager::validateRepoName(const std::string& repo) {
     if (repo.empty()) {
         return Report::Bad("Repo name should not be empty");
     }
@@ -27,12 +27,12 @@ Report Cfman::validateRepoName(const std::string& repo) {
 }
 
 
-bool Cfman::noProfilesExist() {
+bool ConfigManager::noProfilesExist() {
     return m_profiles.size() == 0;
 }
 
 
-bool Cfman::profileExists(const strview profile_name) {
+bool ConfigManager::profileExists(const strview profile_name) {
     for (const Profile& prof : m_profiles) {
         if (prof.name == profile_name) {
             return true;
@@ -42,7 +42,7 @@ bool Cfman::profileExists(const strview profile_name) {
 }
 
 
-Profile* Cfman::getProfileByName(const strview prof_name) {
+Profile* ConfigManager::getProfileByName(const strview prof_name) {
     for (uint32 i=0;  i < m_profiles.size();  ++i) {
         if (m_profiles[i].name == prof_name) {
             return &m_profiles[i];
@@ -54,7 +54,7 @@ Profile* Cfman::getProfileByName(const strview prof_name) {
 
 
 // Get current profile as string
-std::string Cfman::activeProf() {
+std::string ConfigManager::activeProf() {
     std::string profile_name = m_current_profile.name;
     return profile_name;
 }
@@ -62,7 +62,7 @@ std::string Cfman::activeProf() {
 
 
 // Create a folder and register a new profile
-Report Cfman::newProfile(
+Report ConfigManager::newProfile(
     const std::string& name, const std::string& github_name,
     const std::string& repo_name, bool is_public,
     bool is_external, const char* const initial_commit_message
@@ -129,7 +129,7 @@ Report Cfman::newProfile(
 
 
 
-Report Cfman::deleteProfile(const strview profile_name) {
+Report ConfigManager::deleteProfile(const strview profile_name) {
     if (!profileExists(profile_name)) {
         return Report::Bad("Can't delete '{}', it doesn't exist!", profile_name);
     }
@@ -167,7 +167,7 @@ Report Cfman::deleteProfile(const strview profile_name) {
 
 
 // Set current dotty profile
-Report Cfman::setActiveProfile(const strview name) {
+Report ConfigManager::setActiveProfile(const strview name) {
     Report report;
     MasterConfigParser master_cfman;
 
@@ -201,7 +201,7 @@ Report Cfman::setActiveProfile(const strview name) {
 }
 
 
-Report Cfman::listProfiles(bool name, bool repo, bool url, bool gh) {
+Report ConfigManager::listProfiles(bool name, bool repo, bool url, bool gh) {
     Report rep;
 
     for (uint32 i=0;  i < m_profiles.size();  ++i) {
@@ -285,7 +285,7 @@ Report Cfman::listProfiles(bool name, bool repo, bool url, bool gh) {
 // }
 
 
-bool Cfman::detectPreinitConfig() {
+bool ConfigManager::detectPreinitConfig() {
     std::ifstream master(HOME/master_src, std::ios::in);
     if (!master) return false;  // doesn't even exist
     else if (fs::is_empty(HOME/master_src)) return false;
@@ -293,7 +293,7 @@ bool Cfman::detectPreinitConfig() {
 }
 
 
-Report Cfman::reloadConfig() {
+Report ConfigManager::reloadConfig() {
     cm::debug("", __FUNCTION__, "()...");
 
     cm::debug("Loading master config..\n");
@@ -321,7 +321,7 @@ Report Cfman::reloadConfig() {
 
 
 // Load dotty configuration and debug
-void Cfman::load(bool reg) {
+void ConfigManager::load(bool reg) {
     cm::debug("", __FUNCTION__, "()...");
 
     std::string prof = activeProf();
@@ -357,7 +357,7 @@ void Cfman::load(bool reg) {
 
 // Copy all source files to destination files, pairs defined by a member
 std::array<std::vector<SrcDest>, 4>
-Cfman::systemToRepo() {
+ConfigManager::systemToRepo() {
 
     static std::vector<SrcDest> succeed_cp_f;
     static std::vector<SrcDest> succeed_cp_d;
@@ -457,7 +457,7 @@ Cfman::systemToRepo() {
 
 
 // Copy/link files/directories from repo(config storage) to their system targets
-void Cfman::repoToSystem() {
+void ConfigManager::repoToSystem() {
     COMPTIME_STR ERR = "Skipping target: ";
     // COPY-FILES
     for (auto [src, dest] : files_to_copy) {
@@ -500,4 +500,4 @@ void Cfman::repoToSystem() {
     }
 }
 
-Cfman dotty;
+ConfigManager dotty;

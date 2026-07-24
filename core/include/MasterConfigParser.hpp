@@ -1,5 +1,5 @@
 #pragma once
-#include "config_parser.hpp"
+#include "DotlangParser.hpp"
 
 
 // methods with 'r..' prefix are config readers,

@@ -49,11 +49,11 @@ inline void perror(std::format_string<Args...>, Args... args) {
 
 
 // uses std::cin or dotl::read_string()
-template <bool std_line_reader=false, class T>
+template <bool line_noise=false, class T>
 inline T& prompt(const char* prompt, T& lval) {
     // Read input relevantly
     if constexpr (std::is_same_v<char, T> || std::is_convertible_v<char, T>) {
-        if (!std_line_reader) {
+        if (!line_noise) {
             lval = dotl::prompt(prompt).read_string();
             cm::print("\n");
         } else {
@@ -63,7 +63,7 @@ inline T& prompt(const char* prompt, T& lval) {
     }
     else
     {
-        if constexpr (!std_line_reader) {
+        if constexpr (!line_noise) {
             dotl::prompt(prompt);
             lval = dotl::read_string().string();
             cm::print("\n");

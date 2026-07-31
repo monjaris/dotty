@@ -1,8 +1,8 @@
 [
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/input/linux/x86_64/debug/tests/input.cpp.o", "tests/input.cpp"],
-  "file": "tests/input.cpp"
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/exec/linux/x86_64/debug/tests/exec.cpp.o", "tests/exec.cpp"],
+  "file": "tests/exec.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
@@ -11,16 +11,16 @@
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/build/.gens/core/linux/unity_build/unity_1.cpp.o", "build/.gens/core/linux/unity_build/unity_1.cpp"],
-  "file": "build/.gens/core/linux/unity_build/unity_1.cpp"
-},
-{
-  "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/exec/linux/x86_64/debug/tests/exec.cpp.o", "tests/exec.cpp"],
-  "file": "tests/exec.cpp"
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/input/linux/x86_64/debug/tests/input.cpp.o", "tests/input.cpp"],
+  "file": "tests/input.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
   "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/dotty/linux/x86_64/debug/build/.gens/dotty/linux/unity_build/unity_1.cpp.o", "build/.gens/dotty/linux/unity_build/unity_1.cpp"],
   "file": "build/.gens/dotty/linux/unity_build/unity_1.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/build/.gens/core/linux/unity_build/unity_1.cpp.o", "build/.gens/core/linux/unity_build/unity_1.cpp"],
+  "file": "build/.gens/core/linux/unity_build/unity_1.cpp"
 }]

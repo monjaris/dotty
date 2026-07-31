@@ -10,10 +10,14 @@ CCACHE=/usr/bin/ccache
 AS=/usr/bin/clang
 CXX=/usr/bin/clang++
 
-LD=/usr/bin/clang++ -fuse-ld=lld
 AR=/usr/bin/llvm-ar
 SH=/usr/bin/clang++
+LD=/usr/bin/clang++ -fuse-ld=lld
 
+input_LD=/usr/bin/clang++ -fuse-ld=lld
+input_CXX=/usr/bin/clang++
+input_CXX=/usr/bin/clang++
+input_CXX=/usr/bin/clang++
 exec_LD=/usr/bin/clang++ -fuse-ld=lld
 exec_CXX=/usr/bin/clang++
 exec_CXX=/usr/bin/clang++
@@ -30,11 +34,11 @@ dotty_LD=/usr/bin/clang++ -fuse-ld=lld
 dotty_CXX=/usr/bin/clang++
 dotty_CXX=/usr/bin/clang++
 dotty_CXX=/usr/bin/clang++
-input_LD=/usr/bin/clang++ -fuse-ld=lld
-input_CXX=/usr/bin/clang++
-input_CXX=/usr/bin/clang++
-input_CXX=/usr/bin/clang++
 
+input_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/input/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
+input_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/input/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
+input_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/input/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
+input_LDFLAGS=
 exec_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/exec/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
 exec_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/exec/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
 exec_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/exec/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
@@ -51,16 +55,23 @@ dotty_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -in
 dotty_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/dotty/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
 dotty_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/dotty/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
 dotty_LDFLAGS=-Lbuild/linux/x86_64/debug -lcore
-input_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/input/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
-input_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/input/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
-input_CXXFLAGS=-Qunused-arguments -O0 -std=c++23 -include include/common.hpp -include-pch build/.objs/input/linux/x86_64/debug/include/cxx/common.hpp.pch -Iinclude -Icore/include -Ivendor -Ideps
-input_LDFLAGS=
 
-default:  exec parser core dotty input
+default:  input exec parser core dotty
 
-all:  exec parser core dotty input
+all:  input exec parser core dotty
 
-.PHONY: default all  exec parser core dotty input
+.PHONY: default all  input exec parser core dotty
+
+input: build/linux/x86_64/debug/input
+build/linux/x86_64/debug/input: build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
+	@echo linking.debug input
+	@mkdir -p build/linux/x86_64/debug
+	$(VV)$(input_LDFLAGS)$(input_LD) -o build/linux/x86_64/debug/input build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
+
+build/.objs/input/linux/x86_64/debug/tests/input.cpp.o: tests/input.cpp
+	@echo ccache compiling.debug tests/input.cpp
+	@mkdir -p build/.objs/input/linux/x86_64/debug/tests
+	$(VV)$(input_CXX) -c $(input_CXXFLAGS) -o build/.objs/input/linux/x86_64/debug/tests/input.cpp.o tests/input.cpp
 
 exec: build/linux/x86_64/debug/exec
 build/linux/x86_64/debug/exec: build/.objs/exec/linux/x86_64/debug/tests/exec.cpp.o
@@ -136,18 +147,12 @@ build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o: src/cli_commands.cp
 	@mkdir -p build/.objs/dotty/linux/x86_64/debug/src
 	$(VV)$(dotty_CXX) -c $(dotty_CXXFLAGS) -o build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o src/cli_commands.cpp
 
-input: build/linux/x86_64/debug/input
-build/linux/x86_64/debug/input: build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
-	@echo linking.debug input
-	@mkdir -p build/linux/x86_64/debug
-	$(VV)$(input_LDFLAGS)$(input_LD) -o build/linux/x86_64/debug/input build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
+clean:  clean_input clean_exec clean_parser clean_core clean_dotty
 
-build/.objs/input/linux/x86_64/debug/tests/input.cpp.o: tests/input.cpp
-	@echo ccache compiling.debug tests/input.cpp
-	@mkdir -p build/.objs/input/linux/x86_64/debug/tests
-	$(VV)$(input_CXX) -c $(input_CXXFLAGS) -o build/.objs/input/linux/x86_64/debug/tests/input.cpp.o tests/input.cpp
-
-clean:  clean_exec clean_parser clean_core clean_dotty clean_input
+clean_input: 
+	@rm -rf build/linux/x86_64/debug/input
+	@rm -rf build/linux/x86_64/debug/input.sym
+	@rm -rf build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
 
 clean_exec: 
 	@rm -rf build/linux/x86_64/debug/exec
@@ -174,9 +179,4 @@ clean_dotty:  clean_core
 	@rm -rf build/.objs/dotty/linux/x86_64/debug/src/cli.cpp.o
 	@rm -rf build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o
 	@rm -rf build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o
-
-clean_input: 
-	@rm -rf build/linux/x86_64/debug/input
-	@rm -rf build/linux/x86_64/debug/input.sym
-	@rm -rf build/.objs/input/linux/x86_64/debug/tests/input.cpp.o
 

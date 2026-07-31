@@ -124,8 +124,8 @@ int32 CmdLine::do_update() {
         return EXIT_FAILURE;
     }
 
-    Lexer lexer;
-    ConfigParser parser;
+    DotlangLexer lexer;
+    DotlangParser parser;
     std::ifstream conf(
         dotty.config_d/dotty.activeProf()/dotty.config_src,
         std::ios::in

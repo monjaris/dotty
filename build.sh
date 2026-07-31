@@ -9,7 +9,7 @@ copy_bin=""
 
 
 # set submodules up
-if nc -zw 1 1.1.1.1 53 >/dev/null 2>&1; then
+if ping -c1 cloudfare.com >/dev/null 2>&1; then
     git submodule update --init
 
     cd "deps/dotline"
@@ -38,14 +38,15 @@ fi
 
 # either debug or release
 if [ "$1" = "dev" ]; then
-    [ "$(xmake config --show 2>/dev/null | grep mode)" != *debug* ] && \
-        xmake config -m debug
+    xmake config --mode=debug
+    xmake config --toolchain=dotty.llvm
     copy_bin="$debug_bin"
     verbose="."
     shift
 else
     [ "$(xmake config --show 2>/dev/null | grep mode)" != *release* ] && \
-        xmake config -m release
+    xmake config --mode=release
+    xmake config --toolchain=dotty.gnu
     copy_bin="$release_bin"
     verbose=""
 fi

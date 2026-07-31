@@ -5,7 +5,6 @@ int main() {
     if (home == nullptr) {
         cm::os::exec("echo", {"how", "?"});
     }
-    // replace current process with this
-    cm::os::exec("kitty", {home});
-    ::exit(1);
+    // replace current process with new process
+    cm::os::exec("$VISUAL", {home});
 }

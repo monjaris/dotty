@@ -5,8 +5,7 @@ set_plat("linux")
 --- RULES/POLICIES
 add_rules("mode.debug", "mode.release"); set_defaultmode("debug")
 add_rules("plugin.compile_commands.autoupdate")
--- set_policy("build.progress_style", "multirow")
--- add_rules("c++.unity_build")
+add_rules("c++.unity_build")
 
 
 --- TOOLCHAIN
@@ -21,21 +20,10 @@ toolchain_end()
 toolchain("dotty.llvm")
     set_kind("standalone"); set_toolset("cxx", "clang++");
     set_toolset("as",    "clang"); set_toolset("ar",    "llvm-ar")
-    set_toolset("ld",    "clang++"); set_toolset("sh",    "clang++")
+    set_toolset("ld",    "clang++ -fuse-ld=lld"); set_toolset("sh",    "clang++")
     set_toolset("ex",    "clang++"); set_toolset("strip", "llvm-strip")
 toolchain_end()
 
-set_toolchains("dotty.gnu")
-
-
---- HOOK
-target("script")
-    set_kind("phony")
-    set_policy("build.fence", true)
-    on_build(function(target)
-        os.exec("git submodule update --init")
-    end)
-target_end()
 
 --- SCRIPT
     if is_mode("debug") then
@@ -69,7 +57,6 @@ target("parser") add_files("tests/parser.cpp")
 target("core")
     set_kind("static")
     add_files("core/src/*.cpp")
-    add_deps("script")
     add_packages("bat")
 
 target("dotty")

@@ -2,13 +2,13 @@
 
 static const std::string source[]
 {
-    "#! allow-sudo, allow-idk",
+    "#! allow-sudo, allow-dummy",
 };
 
 int main()
 {
-    Lexer lexer;
-    ConfigParser cfp;
+    DotlangLexer lexer;
+    DotlangParser cfp;
     Report report;
 
     for (auto i=std::begin(source);  i < std::end(source);  ++i) {

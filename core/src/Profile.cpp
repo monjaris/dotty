@@ -11,12 +11,3 @@ Profile::Profile(
     this->is_pub = is_public;
     this->is_ext = is_external;
 }
-
-// std::string Profile::repoUrl() const {
-    // return cm::make_repo_url(github_host, repo_name);
-// }
-
-// fs::path Profile::getConfigPath() const {
-    // return  dotty.config_d/name/dotty.config_source;
-// }
-

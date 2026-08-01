@@ -9,20 +9,7 @@ copy_bin=""
 
 
 # set submodules up
-if ping -c1 cloudfare.com >/dev/null 2>&1; then
-    git submodule update --init
-
-    cd "deps/dotline"
-    git fetch --quiet
-
-    if git status -uno | grep -q "behind"; then
-        cd ../..
-        git submodule update --init --remote "deps/dotline"
-    else
-        cd ../..
-    fi
-fi
-
+git submodule update --init --remote
 
 
 # portable nproc
@@ -38,15 +25,12 @@ fi
 
 # either debug or release
 if [ "$1" = "dev" ]; then
-    xmake config --mode=debug
-    xmake config --toolchain=dotty.llvm
+    xmake config --mode=debug --toolchain=dotty.llvm
     copy_bin="$debug_bin"
     verbose="."
     shift
 else
-    [ "$(xmake config --show 2>/dev/null | grep mode)" != *release* ] && \
-    xmake config --mode=release
-    xmake config --toolchain=dotty.gnu
+    xmake config --mode=release --toolchain=dotty.gnu
     copy_bin="$release_bin"
     verbose=""
 fi

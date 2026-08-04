@@ -20,7 +20,7 @@ void DP::m_advance() {
 // Interdiamate parse function
 void DP::ResolvePaths(std::string* src, std::string* dest) {
     // SRC resolution
-    *src = cm::parsePathTilde(*src);
+    *src = core::parsePathTilde(*src);
     // DEST resolution
     if (dest->ends_with("/..")) { dest->replace(dest->size()-2, 2, fs::path(*src).filename()); }
     else if (*dest == "..") { *dest = fs::path(*src).filename(); }
@@ -43,52 +43,84 @@ ParseReport DP::m_parsePathOperation(inilist<Action> options)
 {
     ParseReport report;
 
-    if (Token left = m_get();  left.type == Token::STRING) {
+    if (Token left = m_get();  left.type == Token::STRING && (report.matched = true)) {
         m_advance();
 
         // 1.  >>
-        if (Token oper = m_get();  oper.type == Token::COPIER) {
+        if (Token oper = m_get();  oper.type == Token::COPIER && (report.matched = true)) {
             m_advance();
 
-            if (Token right = m_get();  right.type == Token::STRING) {
+            if (Token right = m_get();  right.type == Token::STRING && (report.matched = true)) {
                 ResolvePaths(&left.name, &right.name);
-                if (cm::contains(options, opts.sudo)) {
+                if (core::contains(options, opts.sudo)) {
                     sudo_copy_files.emplace_back(SrcDest{left.name, right.name});
                 } else {
                     copy_files.emplace_back(SrcDest{left.name, right.name});
                 }
+                m_advance();
             }
-            else report.addComplain("Expected STRING after COPIER operator\n");
+            else
+            {
+                report.addComplain("Expected STRING after COPIER operator\n");
+                report.matched = false;
+            }
         }
         // 2.  ->
-        if (Token oper = m_get();  oper.type == Token::LINKER) {
+        else if (Token oper = m_get();  oper.type == Token::LINKER && (report.matched = true)) {
             m_advance();
 
-            if (Token right = m_get();  right.type == Token::STRING) {
+            if (Token right = m_get();  right.type == Token::STRING && (report.matched = true)) {
                 ResolvePaths(&left.name, &right.name);
-                link_files.emplace_back(SrcDest{left.name, right.name});
+                if (core::contains(options, opts.sudo)) {
+                    sudo_link_files.emplace_back(SrcDest{left.name, right.name});
+                } else {
+                    link_files.emplace_back(SrcDest{left.name, right.name});
+                }
+                m_advance();
             }
-            else report.addComplain("Expected STRING after LINKER operator\n");
+            else
+            {
+                report.addComplain("Expected STRING after LINKER operator\n");
+                report.matched = false;
+            }
         }
         // 3.  >>*
-        if (Token oper = m_get();  oper.type == Token::DIR_COPIER) {
+        else if (Token oper = m_get();  oper.type == Token::DIR_COPIER && (report.matched = true)) {
             m_advance();
 
-            if (Token right = m_get();  right.type == Token::STRING) {
+            if (Token right = m_get();  right.type == Token::STRING && (report.matched = true)) {
                 ResolvePaths(&left.name, &right.name);
-                copy_dirs.emplace_back(SrcDest{left.name, right.name});
+                if (core::contains(options, opts.sudo)) {
+                    sudo_copy_dirs.emplace_back(SrcDest{left.name, right.name});
+                } else {
+                    copy_dirs.emplace_back(SrcDest{left.name, right.name});
+                }
+                m_advance();
             }
-            else report.addComplain("Expected STRING after DIR-COPIER operator\n");
+            else
+            {
+                report.addComplain("Expected STRING after DIR-COPIER operator\n");
+                report.matched = false;
+            }
         }
         // 4.  ->*
-        if (Token oper = m_get();  oper.type == Token::DIR_LINKER) {
+        else if (Token oper = m_get();  oper.type == Token::DIR_LINKER && (report.matched = true)) {
             m_advance();
 
-            if (Token right = m_get();  right.type == Token::STRING) {
+            if (Token right = m_get();  right.type == Token::STRING && (report.matched = true)) {
                 ResolvePaths(&left.name, &right.name);
-                link_dirs.emplace_back(SrcDest{left.name, right.name});
+                if (core::contains(options, opts.sudo)) {
+                    sudo_link_dirs.emplace_back(SrcDest{left.name, right.name});
+                } else {
+                    link_dirs.emplace_back(SrcDest{left.name, right.name});
+                }
+                m_advance();
             }
-            else report.addComplain("Expected STRING after DIR-LINKER operator\n");
+            else
+            {
+                report.addComplain("Expected STRING after DIR-LINKER operator\n");
+                report.matched = false;
+            }
         }
 
         else
@@ -106,11 +138,16 @@ ParseReport DP::m_parseAction()
 {
     ParseReport report;
 
-    if (m_checks() && m_get().type == Token::ACTION) {
+    if (m_checks() && m_get().type == Token::ACTION && (report.matched = true)) {
         Token lex = m_get();
-        Action opt = Action(lex.name.c_str());
-
+        m_advance();
+        Action opt = Action { nullptr, lex.name.c_str() };
         report = m_parsePathOperation({opt});
+    }
+    else
+    {
+        report.addComplain("Expected ACTION\n");
+        report.matched = false;
     }
 
     return report;
@@ -121,21 +158,24 @@ ParseReport DP::m_parseDirectives()
 {
     ParseReport report;
 
-    if (m_checks() && m_get().type == Token::DIRECTIVE) {
+    if (m_checks() && m_get().type == Token::DIRECTIVE && (report.matched = true)) {
         std::string directive_list = m_get().name;
 
         for (auto&& d  : directive_list | std::views::split(',')) {
             std::string name(d.begin(), d.end());
-            if (name == "allow-sudo") {
-                opts.sudo.enable(true);
+            if (name == opts.sudo.directive) {
+                opts.sudo.enable();
             }
-            else
-            {
-                report.addComplain("Unknown directive: '{}'", name);
-            }
+
+            else report.addComplain("Unknown directive: '{}'", name);
         }
 
         m_advance();
+    }
+    else
+    {
+        report.addComplain("Expected DIRECTIVE\n");
+        report.matched = false;
     }
 
     return report;
@@ -145,7 +185,9 @@ ParseReport DP::m_parseDirectives()
 ParseReport DP::parseMain()
 {
     ParseReport report;
-
+    // reset actions
+    opts.sudo.reset();
+    // preserve memory for path vectors
     copy_files.reserve(64);
     copy_dirs.reserve(64);
     link_files.reserve(64);
@@ -156,29 +198,40 @@ ParseReport DP::parseMain()
     sudo_link_dirs.reserve(32);
 
 
+    // call parsing functions
+    //
+    // if branch condition fails: return with `report.matched = false`
+    // which results in m_advance() and continuing to next iteration
+    //
+    // if branch condition doesn't fail: return `report.matched = true`
+    // which falls to erroring about unexpected token.
+
     // # -> SPACES -> DIRECTIVE -> COMMA? -> (DIRECTIVE...)
     report = m_parseDirectives();
 
-    while(m_checks())
-    {
-        // call parsing functions
-        //
-        // if branch condition fails: return with `report.matched = false`
-        // which results in m_advance() and continuing to next iteration
-        //
-        // if branch condition doesn't fail: return `report.matched = true`
-        // which falls to erroring about unexpected token.
+    while (m_checks()) {
+        bool line_sudo = false;
 
-        // STRING -> OPER -> STRING
-        if (report = m_parsePathOperation(inilist<Action>{});  !report.matched) {
-            m_advance(); continue;
+        if (m_get().type == Token::IDENT && m_get().name == opts.sudo.command) {
+            if (!opts.sudo.is_enabled()) {
+                report.addComplain("'sudo' used without '#!allow-sudo' directive");
+                m_advance();
+                continue;
+            }
+            line_sudo = true;
+            m_advance();
         }
 
-        report.addComplain(
-            "Unexpected token: '{}' with the type of <{}>",
-            m_get().name, (char)m_get().type
-        );
+        if (report = m_parsePathOperation(
+                line_sudo ? inilist<Action>{opts.sudo} : inilist<Action>{}
+            ); report.matched) {
+            continue;
+        }
+        else if (report = m_parseAction(); report.matched) {
+            continue;
+        }
 
+        report.addComplain(...);
         m_advance();
     }
 

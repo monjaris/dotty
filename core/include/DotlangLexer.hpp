@@ -18,7 +18,7 @@ struct Token {
         EQUAL='=',
         // sentinel
         NONE='_',
-        UNKNOWN='!'
+        UNKNOWN='?'
     } type;
     std::string name;
 };
@@ -47,17 +47,18 @@ private:
     static constexpr char CMNT = '#';
 
 private:
-    [[nodiscard]] char get();
-    bool checks();
-    void step(uint32 n=1);
-    void skipws();
+    [[nodiscard]] char m_seek();
+    bool m_checks();
+    void m_step(uint32 n=1);
+    void m_skipws();
 
+    LexRes lexDirectiveLine();
+    LexRes lexAction();
     LexRes lexString();
     LexRes lexCopier();
     LexRes lexLinker();
     LexRes lexDirCopier();
     LexRes lexDirLinker();
-    LexRes lexDirectiveLine();
     LexRes lexIdent();
     LexRes lexEqual();
 

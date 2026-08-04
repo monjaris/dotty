@@ -1,7 +1,7 @@
 --- RULES/POLICIES
 add_rules("mode.debug", "mode.release"); set_defaultmode("debug")
 add_rules("plugin.compile_commands.autoupdate")
-add_rules("c++.unity_build")
+-- add_rules("c++.unity_build")
 
 
 --- TOOLCHAIN
@@ -47,7 +47,7 @@ set_pcxxheader("include/common.hpp")
 --- TESTS
 target("input") add_files("tests/input.cpp")
 target("exec") add_files("tests/exec.cpp")
-target("parser") add_files("tests/parser.cpp")
+target("parser") add_files("tests/parser.cpp") add_deps("core")
 
 --- TARGETS
 target("core")

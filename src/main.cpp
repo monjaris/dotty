@@ -2,7 +2,7 @@
 
 int main(int argc, char** argv)
 {
-    cm::initialize();
+    core::initialize();
 
     CmdLine cmd_line(argc, argv);
     cmd_line.setup();

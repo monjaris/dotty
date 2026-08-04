@@ -9,8 +9,8 @@ public:
 
     std::vector<Profile> m_profiles;
 
-    const fs::path HOME = cm::os::userHomePath();  // this throws exception on fail, nice thing
-    fs::path config_d = HOME/cm::os::get_config_d()/"dotty";
+    const fs::path HOME = core::os::userHomePath();  // this throws exception on fail, nice thing
+    fs::path config_d = HOME/core::os::get_config_d()/"dotty";
     fs::path data_d = HOME/".local/share/dotty";
 
     const char* const master_src = ".dotty.toml";
@@ -22,6 +22,10 @@ public:
     std::vector<SrcDest> files_to_link = {};
     std::vector<SrcDest> dirs_to_copy = {};
     std::vector<SrcDest> dirs_to_link = {};
+    std::vector<SrcDest> sudo_files_to_copy = {};
+    std::vector<SrcDest> sudo_files_to_link = {};
+    std::vector<SrcDest> sudo_dirs_to_copy = {};
+    std::vector<SrcDest> sudo_dirs_to_link = {};
 
     enum class Res : uint8_t {
         OK=0,
@@ -52,7 +56,7 @@ public:
     bool detectPreinitConfig();
     Report reloadConfig();
     void load(bool first_load);
-    std::array<std::vector<SrcDest>, 4> systemToRepo();
+    std::array<std::vector<SrcDest>, 8> systemToRepo();
     void repoToSystem();
 };
 

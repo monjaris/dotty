@@ -24,22 +24,33 @@ class Action {
 
 public:
     const char* directive;
+    const char* command;
 
-    Action (const char* directive): directive(directive) {}
+    explicit Action (const char* directive, const char* command)
+    : directive(directive), command(command) {}
 
-    void enable(bool enabled = true) {
-        m_enabled = enabled;
+    bool is_enabled() const {
+        return m_enabled;
+    }
+
+    void enable() {
+        m_enabled = true;
+    }
+
+    void reset() {
+        m_enabled = false;
     }
 
     // for comparison trait
     bool operator== (const Action& other) const {
-        return directive == other.directive;
+        return !strcmp(command, other.command);
     }
 };
 
 NAMESPACE_END()
 
 
+// To fix the fact that if branches of token type checks can fail
 struct ParseReport : Report {
     bool matched = false;
 };
@@ -50,8 +61,8 @@ class DotlangParser
 private:
     uint32 idx = { 0uz };
 
-    struct Options {
-        Action sudo {"allow-sudo"};
+    struct {
+        Action sudo {"allow-sudo", "sudo"};
     } opts;
 
 public:

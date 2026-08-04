@@ -68,7 +68,7 @@ inline std::vector<std::string> unimplemented;
 
 using namespace std::string_literals;
 namespace fs = std::filesystem;
-namespace cm {};
+namespace core {};
 
 template<typename T> concept arithmetic = std::is_arithmetic_v<T>;
 

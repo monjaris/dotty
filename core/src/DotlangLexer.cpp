@@ -3,47 +3,82 @@
 using DL = DotlangLexer;
 
 
-[[nodiscard]] char DL::get() {
+[[nodiscard]] char DL::m_seek() {
     return line[pos];
 }
 
-bool DL::checks() {
+bool DL::m_checks() {
     return line.size() > pos;
 }
 
-void DL::step(uint32 n) {
-    while(checks() && n--) { ++pos; }
+void DL::m_step(uint32 n) {
+    while(m_checks() && n--) { ++pos; }
 }
 
-void DL::skipws() {
-    while(checks() && get()==' ') step();
+void DL::m_skipws() {
+    while(m_checks() && m_seek()==' ') m_step();
+}
+
+
+
+// returns `LexRes` between '#' and the last identifier in comma seperated list
+// "# firstword, second_word, third-word" will return "firstword,second_word,third-word"
+LexRes DL::lexDirectiveLine() {
+    std::string directives;
+    m_step(); // skip '#'
+    m_step(); // skip '!'
+    while (m_checks()) {
+        char c = m_seek();
+        if (c == '\0') break;
+        if (::isspace(c)) { m_step(); continue; }
+        if (c == ',') { directives += c; m_step(); continue; }
+        if (::isalpha(c) || c=='-' || c=='_') { directives += c; m_step(); continue; }
+        return LexRes::Bad();
+    }
+    return LexRes::Good(directives);
+}
+
+
+LexRes DL::lexAction() {
+    std::string ident;
+    m_step(); // skip '@'
+    while (m_checks()) {
+        char c = m_seek();
+        if (::isalpha(c) || c == '-' || c == '_') {
+            ident += c;
+            m_step();
+        }
+        else break;
+    }
+    if (ident.empty()) return LexRes::Bad();
+    return LexRes::Good(ident);
 }
 
 
 LexRes DL::lexString() {
-    step();
+    m_step();
     std::string str;
-    while (checks()) {
-        if (get() == '"') break;
+    while (m_checks()) {
+        if (m_seek() == '"') break;
         if (str.size() > PATH_MAX) {
             // "String length is beyond platform's maximum {PATH_MAX}"
             return LexRes::Bad();
         }
-        str += get();
-        step();
+        str += m_seek();
+        m_step();
     }
 
-    step();
+    m_step();
     return LexRes::Good(str);
 }
 
 
 LexRes DL::lexCopier() {
     std::string copier = ">";
-    step();
-    if (get() == '>') {
-        copier += get();
-        step();
+    m_step();
+    if (m_seek() == '>') {
+        copier += m_seek();
+        m_step();
     } else return LexRes::Bad();
     return LexRes::Good(copier);
 }
@@ -51,10 +86,10 @@ LexRes DL::lexCopier() {
 
 LexRes DL::lexLinker() {
     std::string linker = "-";
-    step();
-    if (get() == '>') {
-        linker += get();
-        step();
+    m_step();
+    if (m_seek() == '>') {
+        linker += m_seek();
+        m_step();
     } else return LexRes::Bad();
     return LexRes::Good(linker);
 }
@@ -62,14 +97,14 @@ LexRes DL::lexLinker() {
 
 LexRes DL::lexDirCopier() {
     std::string dir_copier = ">";
-    step();
-    if (get() == '>') {
-        dir_copier += get();
-        step();
+    m_step();
+    if (m_seek() == '>') {
+        dir_copier += m_seek();
+        m_step();
     } else return LexRes::Bad();
-    if (get() == '*') {
-        dir_copier += get();
-        step();
+    if (m_seek() == '*') {
+        dir_copier += m_seek();
+        m_step();
     }
     else return LexRes::Bad();
     return LexRes::Good(dir_copier);
@@ -78,53 +113,35 @@ LexRes DL::lexDirCopier() {
 
 LexRes DL::lexDirLinker() {
     std::string dir_copier = "-";
-    step();
-    if (get() == '>') {
-        dir_copier += get();
-        step();
+    m_step();
+    if (m_seek() == '>') {
+        dir_copier += m_seek();
+        m_step();
     } else return LexRes::Bad();
-    if (get() == '*') {
-        dir_copier += get();
-        step();
+    if (m_seek() == '*') {
+        dir_copier += m_seek();
+        m_step();
     }
     else return LexRes::Bad();
     return LexRes::Good(dir_copier);
 }
 
 
-// returns `LexRes` between '#' and the last identifier in comma seperated list
-// "# firstword, second_word, third-word" will return "firstword,second_word,third-word"
-LexRes DL::lexDirectiveLine() {
-    std::string directives;
-    step(); // skip '#'
-    step(); // skip '!'
-    while (checks()) {
-        char c = get();
-        if (c == '\0') break;
-        if (::isspace(c)) { step(); continue; }
-        if (c == ',') { directives += c; step(); continue; }
-        if (::isalpha(c) || c=='-' || c=='_') { directives += c; step(); continue; }
-        return LexRes::Bad();
-    }
-    return LexRes::Good(directives);
-}
-
-
 LexRes DL::lexIdent() {
     std::string ident;
-    while (checks()) {
-        if (::isalpha(get()) || get() == '.' || get() == '-' || get() == '_') {
-            ident += get();
-            step();
+    while (m_checks()) {
+        if (::isalpha(m_seek()) || m_seek() == '.' || m_seek() == '-' || m_seek() == '_') {
+            ident += m_seek();
+            m_step();
         }
-        else return LexRes::Bad();
+        else return LexRes::Good(ident);
     }
     return LexRes::Good(ident);
 }
 
 
 LexRes DL::lexEqual() {
-    step();
+    m_step();
     return LexRes::Good("=");
 }
 
@@ -134,11 +151,9 @@ std::string DL::RemoveComment(std::string line) {
     quotes.reserve(128);
 
     for (uint32 i=0;  i < line.size();  ++i) {
-        if (line[i] == '\'') {
-            quotes.push_back(i);
-        }
+        if (line[i] == '\"') quotes.push_back(i);
 
-        if (cm::is_even(quotes.size())) {
+        if (core::is_even(quotes.size())) {
             if (line[i] == CMNT) {
                 // handle for directive(#!)
                 if (i == line.size()-1) {
@@ -166,9 +181,9 @@ void DL::feed(std::string&& input) {
 
 void DL::print() {
     for (uint32 i=0;  i < tokens.size();  ++i) {
-        cm::print<false>((char)tokens[i].type, " : '", tokens[i].name, "'\n");
+        core::print<false>((char)tokens[i].type, " : '", tokens[i].name, "'\n");
     }
-    cm::print<true>('\n');
+    core::print<true>('\n');
 }
 
 
@@ -179,12 +194,13 @@ Report DL::lexMain() {
     pos = 0;
     Token maintok = {Token::NONE, "<none>"};
 
-    while(checks())
+    while(m_checks())
     {
         line = RemoveComment(line);
-        skipws();
+        m_skipws();
 
-        if (get() == '#') {
+        // Lex Directive
+        if (m_seek() == '#') {
             auto lex = lexDirectiveLine();
             if (lex.success()) {
                 maintok.name = lex.val();
@@ -193,7 +209,18 @@ Report DL::lexMain() {
                 report.addComplain("Couldn't lex directive"); continue;
             }
         }
-        else if (get() == '"') {
+        // Lex ACTION
+        else if (m_seek() == '@') {
+            auto lex = lexAction();
+            if (lex.success()) {
+                maintok.name = lex.val();
+                maintok.type = Token::ACTION;
+            } else {
+                report.addComplain("Couldn't lex action"); continue;
+            }
+        }
+        // Lex STRING
+        else if (m_seek() == '"') {
             auto lex = lexString();
             if (lex.success()) {
                 maintok.name = lex.val();
@@ -203,7 +230,7 @@ Report DL::lexMain() {
             }
         }
         // Lex COPIER && DIR_COPIER
-        else if (get() == '>') {
+        else if (m_seek() == '>') {
             uint32 save_pos = pos;
             auto lex1 = lexDirCopier();
 
@@ -224,7 +251,7 @@ Report DL::lexMain() {
             }
         }
         // Lex LINKER && DIR_LINKER
-        else if (get() == '-') {
+        else if (m_seek() == '-') {
             // same flow with lexing in previous branch
             uint32 save_pos = pos;
             auto lex1 = lexDirLinker();
@@ -245,7 +272,7 @@ Report DL::lexMain() {
                 }
             }
         }
-        else if (isalpha(get())) {
+        else if (isalpha(m_seek())) {
             auto lex = lexIdent();
             if (lex.success()) {
                 maintok.name = lex.val();
@@ -254,10 +281,10 @@ Report DL::lexMain() {
                 report.addComplain("Couldn't lex identifier"); continue;
             }
         }
-        else if (get() == '=') {
+        else if (m_seek() == '=') {
             auto lex = lexEqual();
             if (lex.success()) {
-                maintok.name = lexEqual().val();
+                maintok.name = lex.val();
                 maintok.type = Token::EQUAL;
             } else {
                 report.addComplain("Couldn't lex equal operator"); continue;
@@ -265,15 +292,15 @@ Report DL::lexMain() {
         }
         else
         {
-            if (get() < ' ') continue;  // dont error, ignore if it's '\0' or any char below ' '
-            cm::debug("Lexer::lexMain(): Encountered unknown character: '", get(), "'");
-            if (get() == '\0') cm::debug("and its null\n");
+            if (m_seek() < ' ') continue;  // dont error, ignore if it's '\0' or any char below ' '
+            core::debug("Lexer::lexMain(): Encountered unknown character: '", m_seek(), "'");
+            if (m_seek() == '\0') core::debug("and its null\n");
             tokens.emplace_back(maintok.type=Token::UNKNOWN, maintok.name="<error>");
-            step();
+            m_step();
             continue;
         }
 
-        skipws();
+        m_skipws();
         tokens.emplace_back(maintok);
     }
 

@@ -36,22 +36,23 @@ Report MCP::rEval()
     Report rep;
 
     vars[P_ACTIVE_PROF] = m_toml->table[P_ACTIVE_PROF].value_or(Profile::NOT);
-    vars[P_CFG_EDITOR]  = m_toml->table[P_CFG_EDITOR].value_or(cm::os::get_txt_editor());
+    vars[P_CFG_EDITOR]  = m_toml->table[P_CFG_EDITOR].value_or(core::os::get_txt_editor());
 
     auto* arr_profiles = m_toml->table[P_PROFILES].as_array();
     if (!arr_profiles) return rep.Bad("No profiles configuired!");
 
     for (auto& node_profile  : *arr_profiles) {
-        auto* tbl_profile = node_profile.as_table();
+        toml::table* tbl_profile = node_profile.as_table();
         if (!tbl_profile || tbl_profile->empty()) {
             rep.addComplain("Profile table is empty! ignoring..");
             continue;
         }
+        toml::table& prof = *tbl_profile;
 
-        std::string name = tbl_profile->at(PP_NAME).value_or(Profile::NOT);
-        std::string url  = tbl_profile->at(PP_REPO_URL).value_or("");
-        tern is_public   = tbl_profile->at(PP_REPO_PUB).value_or(tern::neutr);
-        bool is_extern   = tbl_profile->at(PP_EXTERNAL).value_or(false);
+        std::string name = prof[PP_NAME].value_or(Profile::NOT);
+        std::string url  = prof[PP_REPO_URL].value_or("");
+        tern is_public   = prof[PP_REPO_PUB].value_or(tern::neutr);
+        bool is_extern   = prof[PP_EXTERNAL].value_or(false);
 
         // `is_public.boolable()` checks for if `is_public` is not `neutr`
         if (name==Profile::NOT || url.empty() || !is_public.boolable()) {
@@ -84,7 +85,7 @@ Report MCP::wActivateProfile(const strview name) {
     Report rep;
     auto pair = m_toml->table.insert_or_assign(P_ACTIVE_PROF, name);
     if (pair.second == false) rep.addComplain("Active profile was already set.");
-    return rep.Good();
+    return rep;
 }
 
 
@@ -119,15 +120,14 @@ Report MCP::wRemoveProfile(const strview name) {
         return Report::Bad("Profiles array is empty");
     }
 
-    std::vector<usize> indexes(arr_profiles->size());
     for (uint32 i=0;  i < arr_profiles->size();  ++i) {
         if (arr_profiles->at(i).at_path(PP_NAME) == name) {
             arr_profiles->erase(arr_profiles->begin() + i);
-            break;
+            return Report::Good();
         }
     }
 
-    return Report::Good();
+    return Report::Bad("Profile '{}' doesn't exist!", name);
 }
 
 

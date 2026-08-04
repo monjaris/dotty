@@ -1,6 +1,8 @@
 #pragma once
 #pragma GCC diagnostic ignored "-Wignored-attributes"
 #include "common.hpp"
+#include "utils.hpp"
+#include "os.hpp"
 
 #ifndef DEBUG_ON
 #   define DEBUG_ON (1)
@@ -11,10 +13,10 @@
 #endif
 
 
-NAMESPACE_START(cm)
+NAMESPACE_START(core)
 
 struct Report;
-class CmdStream;
+
 
 inline void initialize() {
     std::ios::sync_with_stdio(false);
@@ -39,7 +41,7 @@ inline void debug(Args... args) {
 #endif
     const strview pre = "\033[2m[Debug]\033[0m ";
     const strview post = "\n";
-    cm::print(pre, std::forward<Args>(args)..., post);
+    core::print(pre, std::forward<Args>(args)..., post);
 }
 
 template <class... Args>
@@ -55,9 +57,9 @@ inline T& prompt(const char* prompt, T& lval) {
     if constexpr (std::is_same_v<char, T> || std::is_convertible_v<char, T>) {
         if (!line_noise) {
             lval = dotl::prompt(prompt).read_string();
-            cm::print("\n");
+            core::print("\n");
         } else {
-            cm::print(prompt);
+            core::print(prompt);
             std::cin >> lval;
         }
     }
@@ -66,10 +68,10 @@ inline T& prompt(const char* prompt, T& lval) {
         if constexpr (!line_noise) {
             dotl::prompt(prompt);
             lval = dotl::read_string().string();
-            cm::print("\n");
+            core::print("\n");
         }
         else {
-            cm::print(prompt);
+            core::print(prompt);
             std::getline(std::cin, lval);
         }
     }
@@ -82,7 +84,7 @@ template <class Number, class StringType>
 requires std::is_arithmetic_v<Number> && std::same_as<StringType, const char*>
 inline void prompt_number(const StringType prompt, Number& number, bool std_line_reader = false) {
     if (std_line_reader) {
-        cm::print(prompt);
+        core::print(prompt);
         std::cin >> number;
     }
     else {
@@ -138,16 +140,6 @@ inline std::string concats(const char* base, const char* append) {
     return std::string(base).append(append);
 }
 
-// simply, adds slash between two strings and returns
-inline fs::path cat_path(const fs::path& parent, const fs::path& child) {
-    return parent / child;
-}
-
-[[nodiscard]] inline std::string strip_nl(std::string input) {
-    std::string str = std::move(input);
-    str.erase(std::remove(str.begin(), str.end(), OS_NEWLN), str.end());
-    return str;
-}
 
 // get pair of strings, first being left of the first '.' and second being the rest
 inline std::pair<std::string, std::string> obj_prop(std::string str, char sep='.') {
@@ -182,153 +174,6 @@ inline bool prefix_strip(const std::string& str, const strview prefix, std::stri
     return true;
 }
 
-namespace os
-{
-    // all environment variables of process
-    inline char** get_environ() {
-        return ::environ;  // global unistd variable
-    }
-
-    constexpr uint32 EXEC_MAX_ARGS = 128;
-
-    // replaces current process with given program and it's arguments
-    inline bool exec(const char* program, inilist<const char*> args) {
-        char* argv[EXEC_MAX_ARGS];
-        argv[0] = const_cast<char*>(program);
-        uint32 iw = 1;
-        for (auto& arg : args) {
-            if (iw > EXEC_MAX_ARGS) break;
-            if (arg == nullptr) break;
-            argv[iw] = const_cast<char*>(arg);
-            ++iw;
-        }
-        argv[iw] = nullptr;
-        return ::execvp(program, argv) != -1;
-    }
-
-    // implements returning prog(prog,{argv,nullptr}) to spawn_child() overloads
-    static pid_t impl_spawn_child(const char* prog, char* argv[]) {
-        pid_t pid;
-        uint32 status = posix_spawnp(
-            &pid, prog, nullptr, nullptr,
-            argv,
-            get_environ()
-        );
-        return (status==0)? pid : -1;
-    }
-    // spawn process(posix compliant), returns -1 on failure
-    inline pid_t spawn_child(const char* prog, const char* const* args) {
-        char* argv[EXEC_MAX_ARGS];
-        argv[0] = const_cast<char*>(prog);
-
-        usize ir = 1;  // read index of args, [0] is prog
-        for (usize iw=0;  iw < EXEC_MAX_ARGS-1-1;  ++iw) {
-            if (args[iw] == nullptr || (ir >= EXEC_MAX_ARGS-1)) break;
-            argv[ir++] = const_cast<char*>(args[iw]);
-        }
-        argv[ir] = nullptr;
-        return impl_spawn_child(prog, argv);
-    }
-    // overload with initializer_list type
-    inline pid_t spawn_child(const char* prog, inilist<const char*> arg_list) {
-        char* argv[EXEC_MAX_ARGS];
-        argv[0] = const_cast<char*>(prog);
-
-        usize ir = 1;  // read index of args, [0] is prog
-        for (auto& arg  : arg_list) {
-            if (arg == nullptr || (ir >= EXEC_MAX_ARGS-1)) break;
-            argv[ir++] = const_cast<char*>(arg);
-        }
-        argv[ir] = nullptr;
-        return impl_spawn_child(prog, argv);
-    }
-
-
-    // wait for process to finish by passing the id of that process
-    inline int32 wait_proc(pid_t pid) {
-        int32 status;
-        if (waitpid(pid, &status, 0) == -1) return -1;
-        if (!WIFEXITED(status)) return -1;
-        return WEXITSTATUS(status);
-    }
-
-    inline bool in_path(const char* name) {
-        pid_t pid = ::fork();
-        if (pid == -1) return false;
-        // only child proc runs this branch bcz fork returns two values in both procs
-        if (pid == 0) {
-            int devnull = ::open("/dev/null", O_WRONLY);
-            ::dup2(devnull, STDOUT_FILENO);
-            ::dup2(devnull, STDERR_FILENO);
-            ::close(devnull);
-            exec("which", {name});
-            ::exit(1);  // execlp failed and program reaches here so exit child proc
-        }
-        return wait_proc(pid) == 0;
-    }
-
-    // load $HOME to static constant once and return it
-    inline const char* userHomePath() {
-        static const char* home_path_cache = nullptr;
-        if (home_path_cache != nullptr) return home_path_cache;
-
-        const char* home_env = nullptr;
-        #if defined(DOTTY_GENERIC_UNIX)
-            home_env = ::getenv("HOME");
-        #elif defined(_WIN32)
-            home_env = ::getenv("USERPROFILE");
-        #endif
-    
-        if (home_env == nullptr) {
-            throw std::runtime_error("HOME environment variable is not set!");
-        } else {
-            return (home_path_cache = home_env);
-        }
-    }
-
-
-    // get configuration directory based on the OS
-    inline fs::path get_config_d() {
-        #define NO_PATH "////////////////////////"
-        static fs::path os_config_dir = NO_PATH;
-        // operate once and keep in static storage
-        if (os_config_dir == NO_PATH) {
-            #if defined(DOTTY_FOSS_UNIX)
-                const char* env = ::getenv("XDG_CONFIG_HOME");
-                if (env) return os_config_dir = env;
-                else return os_config_dir = cat_path(userHomePath(), ".config");
-            #elif defined(__APPLE__)
-                return os_config_dir = cat_path(userHomePath(), "Library/Preferences");
-            #elif defined(_WIN32)
-                return os_config_dir = cat_path(userHomePath(), "AppData/Roaming");
-            #else
-                return os_config_dir = cat_path(userHomePath(), ".config");
-            #endif
-        }
-        else return os_config_dir;
-    }
-
-
-    // get system editor with nice fallbacks
-    inline const char* get_txt_editor() {
-        static const char* env_visual = ::getenv("VISUAL");
-        static const char* env_editor = ::getenv("EDITOR");
-        static const char* text_editor = nullptr;
-
-        if (text_editor == nullptr) {
-            if (env_editor)  return (text_editor = env_editor);
-            if (env_visual)  return (text_editor = env_visual);
-            else if (!::system("which nano >" NULLDEV)) return (text_editor = "nano");
-            else if (!::system("which vi >" NULLDEV))   return (text_editor = "vi");
-            else return nullptr;
-        }
-        else {
-            return text_editor;
-        }
-    }
-}
-
-
 
 // create a new file, return false if unsuccessful
 inline bool new_file(const fs::path& path) {
@@ -342,7 +187,7 @@ inline void ensure_directories(const fs::path& dir_path) {
     fs::create_directories(dir_path);
 }
 
-// copy while directory without worrying about flags to pass
+// copy while directory recursively without worrying about flags to pass
 inline void copy_directory(const fs::path& src_d, const fs::path& dest_d, bool cp_if_src_is_newer=false) {
     fs::copy(src_d, dest_d,
         fs::copy_options::recursive | (cp_if_src_is_newer?
@@ -355,7 +200,7 @@ inline void copy_directory(const fs::path& src_d, const fs::path& dest_d, bool c
 constexpr inline fs::path parsePathTilde(std::string path) {
     if (!(path[0] == '~')) return path;
     path.erase(0, 1);
-    const char* const user_home = ::cm::os::userHomePath();
+    const char* const user_home = ::core::os::userHomePath();
     path.insert(0, user_home);
     return path;
 }
@@ -376,11 +221,11 @@ inline bool remove_directory_contents(
     std::error_code remove_result;
 
     for (auto& item : fs::directory_iterator(directory)) {
-        if (!cm::contains(exclude, item.path().filename().c_str())) {
+        if (!core::contains(exclude, item.path().filename().c_str())) {
             fs::remove_all(item, remove_result);
         }
     }
-    cm::debug(remove_result.message());
+    core::debug(remove_result.message());
     return remove_result.value() == 0;
 }
 
@@ -396,7 +241,7 @@ inline std::pair<int32, int32> remove_dir_contents_recursive(
             fs::recursive_directory_iterator(item),
             fs::recursive_directory_iterator{}
         ) + 1 : 1;
-        if (cm::contains(exclude, item.path().filename().c_str()))
+        if (core::contains(exclude, item.path().filename().c_str()))
             continue;
         std::error_code ec;
         removed_c += fs::remove_all(item, ec);
@@ -504,15 +349,16 @@ inline bool internet_is_connected(uint32 timeout_seconds = 2) {
 // }
 
 
-NAMESPACE_END(cm)
-
+NAMESPACE_END(core)
 
 struct tern {
-    enum value_t { yes, no, neutr} value;
+    enum class value_t { no, yes, neutr} value;
+    using value_t::no;  using value_t::yes;  using value_t::neutr;
 
     tern (value_t ternary_value): value(ternary_value) {}
 
     bool boolable() const { return (value==yes) || (value==no); }
+    bool b = std::invocable<std::function<void()>()>;
 
     operator bool() const {
         switch (value) {
@@ -528,7 +374,7 @@ struct tern {
 
 // contains error message and an error code
 struct [[nodiscard]]
-cm::Report {
+core::Report {
     bool m_err = false;
     std::string m_msg = {};
 
@@ -550,7 +396,7 @@ cm::Report {
 
     void printComplains() const {
         if (!m_msg.empty()) {
-            cm::print(m_msg, "\n");
+            core::print(m_msg, "\n");
         }
     }
 
@@ -571,68 +417,9 @@ cm::Report {
 
     void terminateOnBad() {
         if (this->error()) {
-            cm::terminate("Invalid action, terminating!");
+            core::terminate("Invalid action, terminating!");
         }
     }
 };
 
-using cm::Report;
-
-
-
-
-class cm::CmdStream {
-    std::vector<std::string> commands;
-    std::string output_buf;
-
-public:
-    CmdStream () {
-        commands.reserve(128);
-    }
-
-    template <class... FmtArgs>
-    CmdStream& add(std::format_string<FmtArgs...> command_fmt, FmtArgs&&... fmt_args) {
-        commands.push_back(std::format(command_fmt, std::forward<FmtArgs>(fmt_args)...));
-        return *this;
-    }
-
-    void clear() {
-        commands.clear();
-    }
-
-    // provide @arg seperator to put given string between each command(;, &&, ||)
-    int32 run(const char* separator, bool capture_output) {
-        output_buf.clear();
-
-        std::string line;
-        for (uint32 i = 0; i < commands.size(); ++i) {
-            line += commands[i];
-            if (i != commands.size() - 1) line += separator;
-        }
-
-        if (capture_output) {
-            std::string out;
-            std::unique_ptr<FILE, decltype(&pclose)> pipe = {
-                popen(line.c_str(), "r"), pclose
-            };
-            if (pipe == nullptr) return -1;
-
-            char buf[256];
-            while (::fgets(buf, sizeof(buf), pipe.get()) != nullptr)
-            {
-                output_buf.append(buf);
-            }
-            output_buf = cm::strip_nl(output_buf);
-
-            return pclose(pipe.release());
-        }
-        return ::system(line.data());
-    }
-
-    // Output loads to internal buffer after calling .run().
-    // this function, moves internal buffer when returns
-    [[nodiscard]] std::string output() {
-        return std::move(output_buf);
-    }
-};
-
+using core::Report;

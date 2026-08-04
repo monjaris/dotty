@@ -48,7 +48,7 @@ CLI::App* CmdLine::newSubCmd(
     const char* desc, bool profile_agnostic, const int32 (&opt_min_max)[2], const int32 (&sc_min_max)[2]
 ) {
     if (names.size()>3 || names.size()<1) {
-        cm::terminate(
+        core::terminate(
             "", __func__, ": Should pass minimum 1 and maximum 3 names/aliases."
         );
     }
@@ -159,7 +159,7 @@ int32 CmdLine::setup()
 int32 CmdLine::run()
 {
     if (::geteuid() == (uid_t) 0) {
-        cm::terminate<EXIT_SUCCESS>(
+        core::terminate<EXIT_SUCCESS>(
             "Running dotty with sudo is not a good practice!\n"
             "Dotty only asks for sudo if per-profile configuration"
         );
@@ -170,20 +170,24 @@ int32 CmdLine::run()
     active_p = dotty.activeProf();
 
     if (APP.count_all() == 1) {
-        cm::print(impl->default_msg);
+        core::print(impl->default_msg);
         if (active_p == Profile::NOT) {
-            cm::print("Active profile is not set.\n");
+            core::print("Active profile is not set.\n");
         } else {
-            cm::print("Active-profile: ", "\033[32m", active_p, "\033[0m", "\n");
+            core::print("Active-profile: ", "\033[32m", active_p, "\033[0m", "\n");
         }
     }
 
-
-    for (auto& [sub_cmd, data]  : impl->sub_commands) {
-        if (sub_cmd->parsed()) {
+    for (auto& [sub_cmd, data] : impl->sub_commands) {
+        if (
+            sub_cmd->parsed() && !sub_cmd->get_subcommands([](CLI::App* sc){
+                return sc->parsed();
+            }).size()
+        ){
             if (!data.prof_agnostic && (active_p == Profile::NOT)) {
-                cm::terminate("", sub_cmd->get_name(), " command requires an active profile!\n");
+                core::terminate("", sub_cmd->get_name(), " command requires an active profile!\n");
             }
+
             data.action.operator()();
         }
     }

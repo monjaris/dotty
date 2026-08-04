@@ -2,10 +2,17 @@
 
 cd "$(dirname "$0")" || exit 1
 
-verbose=0
-debug_bin="./build/linux/x86_64/debug/dotty"
-release_bin="./build/linux/x86_64/release/dotty"
-copy_bin=""
+
+RAW_PLAT=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$RAW_PLAT" in
+    *bsd*) PLAT="bsd" ;;
+    *)     PLAT="$RAW_PLAT" ;;
+esac
+
+VERBOSE=0
+DEBUG_BIN="./build/${PLAT}/x86_64/debug/dotty"
+RELEASE_BIN="./build/${PLAT}/x86_64/release/dotty"
+COPY_BIN=""
 
 
 # set submodules up
@@ -26,16 +33,16 @@ fi
 # either debug or release
 if [ "$1" = "dev" ]; then
     xmake config --mode=debug --toolchain=dotty.llvm
-    copy_bin="$debug_bin"
-    verbose="."
+    COPY_BIN="$DEBUG_BIN"
+    VERBOSE="."
     shift
 else
     xmake config --mode=release --toolchain=dotty.gnu
-    copy_bin="$release_bin"
-    verbose=""
+    COPY_BIN="$RELEASE_BIN"
+    VERBOSE=""
 fi
 
 
-xmake build -j"$JOBS" ${verbose:+-v} dotty
-cp "$copy_bin" ./dotty
+xmake build -j"$JOBS" ${VERBOSE:+-v} dotty
+cp "$COPY_BIN" ./dotty
 # ./dotty "$@"

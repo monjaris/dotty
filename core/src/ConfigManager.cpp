@@ -396,7 +396,7 @@ CM::systemToRepo()
     bool have_sudo_targets = !sudo_files_to_copy.empty() || !sudo_files_to_link.empty()
                            || !sudo_dirs_to_copy.empty()  || !sudo_dirs_to_link.empty();
     if (have_sudo_targets) {
-        core::print("This profile has @allow-sudo entries — you may be asked for your password.\n");
+        core::print("This profile has @sudo entries — you may be asked for your password.\n");
         core::CmdStream{}.add("sudo -v").run(false, false, true);
     }
 
@@ -515,8 +515,8 @@ void CM::repoToSystem()
     );
 
     if (have_sudo_targets) {
-        core::print("This profile has @allow-sudo entries — you may be asked for your password.\n");
-        core::CmdStream{}.add("sudo -v").run(false, false, true);
+        core::print("This profile has @sudo entries — you may be asked for your password.\n");
+        core::CmdStream{}.add("sudo -v").run(false, false);
     }
 
     // COPY-FILES

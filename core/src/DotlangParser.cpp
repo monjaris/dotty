@@ -5,6 +5,7 @@ using DP = DotlangParser;
 
 
 Token DP::m_get() {
+    if (!m_checks()) return Token{Token::NONE, "<none>"};
     return tokens[idx];
 }
 
@@ -141,13 +142,21 @@ ParseReport DP::m_parseAction()
     if (m_checks() && m_get().type == Token::ACTION && (report.matched = true)) {
         Token lex = m_get();
         m_advance();
-        Action opt = Action { nullptr, lex.name.c_str() };
-        report = m_parsePathOperation({opt});
-    }
-    else
-    {
-        report.addComplain("Expected ACTION\n");
-        report.matched = false;
+
+        if (lex.name == opts.sudo.command && opts.sudo.is_enabled()) {
+            report = m_parsePathOperation({opts.sudo});
+        }
+        else if (lex.name == opts.sudo.command) {
+            report.addComplain(
+                "'{}' used without '#!{}' directive", opts.sudo.command, opts.sudo.directive
+            );
+            report.matched = false;
+        }
+        else
+        {
+            report.addComplain("Unknown action: '{}'", lex.name);
+            report.matched = false;
+        }
     }
 
     return report;
@@ -214,7 +223,9 @@ ParseReport DP::parseMain()
 
         if (m_get().type == Token::IDENT && m_get().name == opts.sudo.command) {
             if (!opts.sudo.is_enabled()) {
-                report.addComplain("'sudo' used without '#!allow-sudo' directive");
+                report.addComplain(
+                    "'{}' used without '#!{}' directive", opts.sudo.command, opts.sudo.directive
+                );
                 m_advance();
                 continue;
             }
@@ -231,7 +242,7 @@ ParseReport DP::parseMain()
             continue;
         }
 
-        report.addComplain(...);
+        report.addComplain("Unexpected token: '{}'", m_get().name);
         m_advance();
     }
 

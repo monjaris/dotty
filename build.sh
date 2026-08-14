@@ -2,35 +2,21 @@
 
 cd "$(dirname "$0")" || exit 1
 
+run-script () { script="$1"; shift; ./scripts/"$script" "$@"; }
 
-RAW_PLAT=$(uname -s | tr '[:upper:]' '[:lower:]')
-case "$RAW_PLAT" in
-    *bsd*) PLAT="bsd" ;;
-    *)     PLAT="$RAW_PLAT" ;;
-esac
-
-VERBOSE=0
+PLAT=$(run-script platform-name.sh)
 DEBUG_BIN="./build/${PLAT}/x86_64/debug/dotty"
 RELEASE_BIN="./build/${PLAT}/x86_64/release/dotty"
-COPY_BIN=""
+run-script update-submodules.sh
 
 
-# set submodules up
-git submodule update --init --remote
-
-
-# portable nproc
-if command -v nproc >/dev/null 2>&1; then
-    JOBS=$(nproc)
-elif command -v sysctl >/dev/null 2>&1; then
-    JOBS=$(sysctl -n hw.ncpu)
-else
-    JOBS=1
+# run make if xmake doesn't exist
+if ! run-script cmd-valid.sh xmake; then
+    make
 fi
 
 
-
-# either debug or release
+# build with dev profile if the first argument is "dev"
 if [ "$1" = "dev" ]; then
     xmake config --mode=debug --toolchain=dotty.llvm
     COPY_BIN="$DEBUG_BIN"
@@ -43,6 +29,7 @@ else
 fi
 
 
+JOBS=$(run-script max-jobs.sh)
 xmake build -j"$JOBS" ${VERBOSE:+-v} dotty
 cp "$COPY_BIN" ./dotty
 # ./dotty "$@"

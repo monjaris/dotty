@@ -61,7 +61,7 @@ class DotlangParser
 private:
     uint32 idx = { 0uz };
 
-    struct {
+    struct Opts {
         Action sudo {"allow-sudo", "sudo"};
     } opts;
 
@@ -82,7 +82,6 @@ private:
     Token m_get();
     bool m_checks();
     void m_advance();
-
 
     ParseReport m_parseAction();
     ParseReport m_parsePathOperation(inilist<Action> options);

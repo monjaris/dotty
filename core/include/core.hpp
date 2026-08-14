@@ -44,10 +44,10 @@ inline void debug(Args... args) {
     core::print(pre, std::forward<Args>(args)..., post);
 }
 
-template <class... Args>
-inline void perror(std::format_string<Args...>, Args... args) {
-    $IMPLEMENT("impl this function and make sure its the main function for printing errors!");
-}
+// template <class... Args>
+// inline void perror(std::format_string<Args...>, Args... args) {
+    // $IMPLEMENT("impl this function and make sure its the main function for printing errors!");
+// }
 
 
 // uses std::cin or dotl::read_string()

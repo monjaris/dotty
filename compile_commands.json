@@ -6,22 +6,17 @@
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/input/linux/x86_64/debug/tests/input.cpp.o", "tests/input.cpp"],
-  "file": "tests/input.cpp"
-},
-{
-  "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/dotty/linux/x86_64/debug/src/cli.cpp.o", "src/cli.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/dotty/linux/x86_64/debug/src/cli.cpp.o", "src/cli.cpp"],
   "file": "src/cli.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o", "src/main.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/dotty/linux/x86_64/debug/src/main.cpp.o", "src/main.cpp"],
   "file": "src/main.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o", "src/cli_commands.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/dotty/linux/x86_64/debug/src/cli_commands.cpp.o", "src/cli_commands.cpp"],
   "file": "src/cli_commands.cpp"
 },
 {
@@ -31,26 +26,31 @@
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o", "core/src/ConfigManager.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/input/linux/x86_64/debug/tests/input.cpp.o", "tests/input.cpp"],
+  "file": "tests/input.cpp"
+},
+{
+  "directory": "/home/ziya/dev/main/dotty",
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/core/linux/x86_64/debug/core/src/ConfigManager.cpp.o", "core/src/ConfigManager.cpp"],
   "file": "core/src/ConfigManager.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o", "core/src/DotlangParser.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/core/linux/x86_64/debug/core/src/DotlangParser.cpp.o", "core/src/DotlangParser.cpp"],
   "file": "core/src/DotlangParser.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o", "core/src/MasterConfigParser.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/core/linux/x86_64/debug/core/src/MasterConfigParser.cpp.o", "core/src/MasterConfigParser.cpp"],
   "file": "core/src/MasterConfigParser.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o", "core/src/Profile.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/core/linux/x86_64/debug/core/src/Profile.cpp.o", "core/src/Profile.cpp"],
   "file": "core/src/Profile.cpp"
 },
 {
   "directory": "/home/ziya/dev/main/dotty",
-  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-o", "build/.objs/core/linux/x86_64/debug/core/src/DotlangLexer.cpp.o", "core/src/DotlangLexer.cpp"],
+  "arguments": ["/usr/bin/clang++", "-c", "-Qunused-arguments", "-O0", "-std=c++23", "-include", "include/common.hpp", "-Iinclude", "-Icore/include", "-Ivendor", "-Ideps", "-Wno-subobject-linkage", "-o", "build/.objs/core/linux/x86_64/debug/core/src/DotlangLexer.cpp.o", "core/src/DotlangLexer.cpp"],
   "file": "core/src/DotlangLexer.cpp"
 }]

@@ -40,7 +40,7 @@ CmdLine::CmdLine(int argc, char** argv) : impl(new Impl()) {
     impl->argv = impl->cli.ensure_utf8(argv);
 }
 
-CmdLine::~CmdLine() {delete impl;}
+CmdLine::~CmdLine() { delete impl; }
 
 
 CLI::App* CmdLine::newSubCmd(

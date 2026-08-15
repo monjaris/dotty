@@ -420,15 +420,15 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
 
     core::print("Deleting profile files and directories!...\n");
 
-    std::error_code res = {};
+    std::error_code fs_err = {};
     //
-    fs::remove_all(dotty.config_d/profile_name, res);
-    if (res.value() != 0) {
+    fs::remove_all(dotty.config_d/profile_name, fs_err);
+    if (fs_err) {
          core::print("[ERROR]: No profile config removed!\n");
     }
     //
-    fs::remove_all(dotty.data_d/profile_name, res);
-    if (res.value() != 0) {
+    fs::remove_all(dotty.data_d/profile_name, fs_err);
+    if (fs_err) {
         core::print("[ERROR]: No profile storage data removed!\n");
     }
 

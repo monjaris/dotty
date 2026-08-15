@@ -16,7 +16,7 @@ void DL::m_step(uint32 n) {
 }
 
 void DL::m_skipws() {
-    while(m_checks() && m_seek()==' ') m_step();
+    while(m_checks() && ::isspace(m_seek())) m_step();
 }
 
 

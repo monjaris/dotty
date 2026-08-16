@@ -4,7 +4,7 @@ using DL = DotlangLexer;
 
 
 [[nodiscard]] char DL::m_seek() {
-    return line[pos];
+    return m_checks() ? line[pos] : '\0';
 }
 
 bool DL::m_checks() {
@@ -16,7 +16,7 @@ void DL::m_step(uint32 n) {
 }
 
 void DL::m_skipws() {
-    while(m_checks() && ::isspace(m_seek())) m_step();
+    while (m_checks() && ::isspace(static_cast<unsigned char>(m_seek()))) m_step();
 }
 
 
@@ -30,9 +30,9 @@ LexRes DL::lexDirectiveLine() {
     while (m_checks()) {
         char c = m_seek();
         if (c == '\0') break;
-        if (::isspace(c)) { m_step(); continue; }
+        if (::isspace(static_cast<unsigned char>(c))) { m_step(); continue; }
         if (c == ',') { directives += c; m_step(); continue; }
-        if (::isalpha(c) || c=='-' || c=='_') { directives += c; m_step(); continue; }
+        if (::isalpha(static_cast<unsigned char>(c)) || c=='-' || c=='_') { directives += c; m_step(); continue; }
         return LexRes::Bad();
     }
     return LexRes::Good(directives);
@@ -44,7 +44,7 @@ LexRes DL::lexAction() {
     m_step(); // skip '@'
     while (m_checks()) {
         char c = m_seek();
-        if (::isalpha(c) || c == '-' || c == '_') {
+        if (::isalpha(static_cast<unsigned char>(c)) || c == '-' || c == '_') {
             ident += c;
             m_step();
         }
@@ -59,7 +59,10 @@ LexRes DL::lexString() {
     m_step();
     std::string str;
     while (m_checks()) {
-        if (m_seek() == '"') break;
+        if (m_seek() == '"') {
+            m_step();
+            return LexRes::Good(str);
+        }
         if (str.size() > PATH_MAX) {
             // "String length is beyond platform's maximum {PATH_MAX}"
             return LexRes::Bad();
@@ -68,8 +71,7 @@ LexRes DL::lexString() {
         m_step();
     }
 
-    m_step();
-    return LexRes::Good(str);
+    return LexRes::Bad();
 }
 
 
@@ -130,7 +132,7 @@ LexRes DL::lexDirLinker() {
 LexRes DL::lexIdent() {
     std::string ident;
     while (m_checks()) {
-        if (::isalpha(m_seek()) || m_seek() == '.' || m_seek() == '-' || m_seek() == '_') {
+        if (::isalpha(static_cast<unsigned char>(m_seek())) || m_seek() == '.' || m_seek() == '-' || m_seek() == '_') {
             ident += m_seek();
             m_step();
         }
@@ -198,6 +200,7 @@ Report DL::lexMain() {
     {
         line = RemoveComment(line);
         m_skipws();
+        if (!m_checks()) break;
 
         // Lex Directive
         if (m_seek() == '#') {
@@ -272,7 +275,7 @@ Report DL::lexMain() {
                 }
             }
         }
-        else if (isalpha(m_seek())) {
+        else if (::isalpha(static_cast<unsigned char>(m_seek()))) {
             auto lex = lexIdent();
             if (lex.success()) {
                 maintok.name = lex.val();
@@ -292,7 +295,10 @@ Report DL::lexMain() {
         }
         else
         {
-            if (m_seek() < ' ') continue;  // dont error, ignore if it's '\0' or any char below ' '
+            if (::iscntrl(static_cast<unsigned char>(m_seek()))) {
+                m_step();
+                continue;
+            }
             core::debug("Lexer::lexMain(): Encountered unknown character: '", m_seek(), "'");
             if (m_seek() == '\0') core::debug("and its null\n");
             tokens.emplace_back(maintok.type=Token::UNKNOWN, maintok.name="<error>");

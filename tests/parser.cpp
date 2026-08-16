@@ -195,6 +195,21 @@ void test_unknown_directive_reports_complain() {
     CHECK(report.error(), "unknown directive: report flags an error");
 }
 
+void test_unterminated_string_is_rejected() {
+    DotlangLexer lexer;
+    lexer.feed(std::string{"\"/etc/hosts >> \"hosts\""});
+    auto report = lexer.lexMain();
+    CHECK(report.error(), "unterminated string: lexer reports an error");
+}
+
+void test_tabs_are_consumed_as_whitespace() {
+    auto tokens = lex_line("\t\"/etc/hosts\"\t>>\t\"hosts\"");
+    DotlangParser p;
+    p.feed(tokens);
+    p.parseMain();
+    CHECK(p.copy_files.size() == 1, "tab whitespace: lexer progresses and parses mapping");
+}
+
 
 int main() {
     test_basic_copy();
@@ -208,6 +223,8 @@ int main() {
     test_sudo_directive_alone_does_not_imply_action();
     test_sudo_state_resets_between_parseMain_calls();
     test_unknown_directive_reports_complain();
+    test_unterminated_string_is_rejected();
+    test_tabs_are_consumed_as_whitespace();
 
     if (failures) {
         std::cerr << "\n" << failures << " test(s) failed.\n";

@@ -198,7 +198,7 @@ inline void copy_directory(const fs::path& src_d, const fs::path& dest_d, bool c
 
 // parse file path by converting tilde('~') to $HOME variable
 constexpr inline fs::path parsePathTilde(std::string path) {
-    if (!(path[0] == '~')) return path;
+    if (path.empty() || !(path[0] == '~')) return path;
     path.erase(0, 1);
     const char* const user_home = ::core::os::userHomePath();
     path.insert(0, user_home);

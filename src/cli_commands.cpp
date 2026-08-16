@@ -75,7 +75,7 @@ int32 CmdLine::do_init() {
     core::debug("URL constructed: ", repo_url);
 
     // ASK REPO-VISIBILITY
-    int32 vis_inp;
+    int32 vis_inp = 1;
     core::prompt_number("Enter repo visibility (1: private, 2: public) [1]: ", vis_inp);
     if (!core::is_any_of(vis_inp, {1, 2})) {
         core::print("Invalid input. Defaulting to private.\n\n");
@@ -134,31 +134,40 @@ int32 CmdLine::do_update()
     );
     if (!conf.is_open()) core::terminate("File could not be opened!\n");
 
+    std::vector<Token> tokens;
     std::string line;
     while (std::getline(conf, line)) {
         core::debug("Lexing config...\n");
         lexer.feed(line);
-        lexer.lexMain().printComplains();
+        Report report = lexer.lexMain();
+        if (report.error()) {
+            report.printComplains();
+            return EXIT_FAILURE;
+        }
 #if DEBUG_ON
         core::debug("\n\nLexed tokens:\n");
         lexer.print();
 #endif
-        parser.feed(lexer.result());
-        core::debug("Parsing tokens...\n");
-        parser.parseMain().printComplains();
-
-        core::debug("Loading parsed lists...\n\n");
-        // regular ones
-        dotty.files_to_copy = parser.copy_files;
-        dotty.files_to_link = parser.link_files;
-        dotty.dirs_to_copy = parser.copy_dirs;
-        dotty.dirs_to_link = parser.link_dirs;
-        // sudo ones
-        dotty.sudo_files_to_copy = parser.sudo_copy_files;
-        dotty.sudo_files_to_link = parser.sudo_link_files;
-        dotty.sudo_dirs_to_copy = parser.sudo_copy_dirs;
-        dotty.sudo_dirs_to_link = parser.sudo_link_dirs;
+        const auto& line_tokens = lexer.result();
+        tokens.insert(tokens.end(), line_tokens.begin(), line_tokens.end());
     }
+
+    parser.feed(tokens);
+    core::debug("Parsing config...\n");
+    Report report = parser.parseMain();
+    if (report.error()) {
+        report.printComplains();
+        return EXIT_FAILURE;
+    }
+
+    dotty.files_to_copy = parser.copy_files;
+    dotty.files_to_link = parser.link_files;
+    dotty.dirs_to_copy = parser.copy_dirs;
+    dotty.dirs_to_link = parser.link_dirs;
+    dotty.sudo_files_to_copy = parser.sudo_copy_files;
+    dotty.sudo_files_to_link = parser.sudo_link_files;
+    dotty.sudo_dirs_to_copy = parser.sudo_copy_dirs;
+    dotty.sudo_dirs_to_link = parser.sudo_link_dirs;
 
     enum { CPF, LNF, CPD, LND, SU_CPF, SU_LNF, SU_CPD, SU_LND };
     auto succeed = dotty.systemToRepo();
@@ -200,7 +209,7 @@ int32 CmdLine::do_push(const char* commit_message) {
         return EXIT_FAILURE;
     }
     if (!core::internet_is_connected()) {
-        core::print("Pull operation requires internet connection\n");
+        core::print("Push operation requires internet connection\n");
         return EXIT_FAILURE;
     }
 
@@ -214,9 +223,9 @@ int32 CmdLine::do_push(const char* commit_message) {
     );
 
     core::CmdStream {}
-        .add("cd {}", (dotty.data_d/dotty.activeProf()).string())
+        .add("cd {}", core::shell_quote((dotty.data_d/dotty.activeProf()).string()))
         .add("git add .")
-        .add("git commit -m \"{}\"", commit_message)
+        .add("git commit -m {}", core::shell_quote(commit_message))
         .add("git push")
     .run(true, false);
 
@@ -248,9 +257,9 @@ int32 CmdLine::do_pull() {
     core::ensure_directories(dotty.HOME/".cache/dotty/");
     core::CmdStream {}
         .add("cd $HOME/.cache/dotty/")
-        .add("rm -rf ./{}", active_prof->name)
-        .add("git clone {} {}", active_prof->repo_url, active_prof->name)
-        .add("rm -rf {}/*", active_config_d)
+        .add("rm -rf ./{}", core::shell_quote(active_prof->name))
+        .add("git clone {} {}", core::shell_quote(active_prof->repo_url), core::shell_quote(active_prof->name))
+        .add("rm -rf {}/*", core::shell_quote(active_config_d))
     .run(true, false);
 
     // Copy cache-dir to data directory
@@ -267,6 +276,40 @@ int32 CmdLine::do_pull() {
             fs::remove_all(item);
         }
     }
+    DotlangLexer lexer;
+    DotlangParser parser;
+    std::ifstream conf(dotty.config_d / dotty.activeProf() / dotty.config_src);
+    if (!conf.is_open()) {
+        core::print("Pulled profile does not contain a readable config file.\n");
+        return EXIT_FAILURE;
+    }
+    std::vector<Token> tokens;
+    std::string line;
+    while (std::getline(conf, line)) {
+        lexer.feed(line);
+        Report report = lexer.lexMain();
+        if (report.error()) {
+            report.printComplains();
+            return EXIT_FAILURE;
+        }
+        const auto& line_tokens = lexer.result();
+        tokens.insert(tokens.end(), line_tokens.begin(), line_tokens.end());
+    }
+    parser.feed(tokens);
+    Report report = parser.parseMain();
+    if (report.error()) {
+        report.printComplains();
+        return EXIT_FAILURE;
+    }
+    dotty.files_to_copy = std::move(parser.copy_files);
+    dotty.files_to_link = std::move(parser.link_files);
+    dotty.dirs_to_copy = std::move(parser.copy_dirs);
+    dotty.dirs_to_link = std::move(parser.link_dirs);
+    dotty.sudo_files_to_copy = std::move(parser.sudo_copy_files);
+    dotty.sudo_files_to_link = std::move(parser.sudo_link_files);
+    dotty.sudo_dirs_to_copy = std::move(parser.sudo_copy_dirs);
+    dotty.sudo_dirs_to_link = std::move(parser.sudo_link_dirs);
+
     dotty.repoToSystem();
     core::copy_directory(active_config_d, fs::path(active_data_d)/dotty.data_cfgref);
 
@@ -285,7 +328,7 @@ int32 CmdLine::do_config(strview what_cfg, const strview editor_name) {
             std::string editor;
             if (!editor_name.empty()) {
                 core::CmdStream cmd;
-                cmd.add("which {}", editor_name).run(false, true, false);
+                cmd.add("which {}", core::shell_quote(editor_name)).run(false, true, false);
                 editor = cmd.output();
             } else {
                 MasterConfigParser mcp;
@@ -293,8 +336,13 @@ int32 CmdLine::do_config(strview what_cfg, const strview editor_name) {
                 mcp.rEval().printComplains();
                 editor = mcp.vars[mcp.P_CFG_EDITOR];
             }
+            if (editor.empty()) {
+                core::print("No usable editor is configured.\n");
+                return EXIT_FAILURE;
+            }
             return core::CmdStream {}
-                .add("{} {}", editor, cfg_path.string())
+                .add("{} {}", core::shell_quote(core::get_first_word(editor)),
+                     core::shell_quote(cfg_path.string()))
             .run(false, false, false);
         }
     };
@@ -383,7 +431,7 @@ int32 CmdLine::do_p_new(
     if (!gh_acc.has_value()) core::terminate("Github login not found");
 
     dotty.newProfile(
-        name, core::active_github_account().value(), repo_name, pub,
+        name, gh_acc.value(), repo_name, pub,
         false, commit_msg.data()
     ).printOnBad().terminateOnBad();
 
@@ -407,7 +455,7 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
 
     // delete github repo
     int32 repo_deletion_failed =  core::CmdStream{}
-        .add("gh repo delete {}", core::repo_from_url(dotty.getProfileByName(profile_name)->repo_url))
+        .add("gh repo delete {}", core::shell_quote(core::repo_from_url(dotty.getProfileByName(profile_name)->repo_url)))
     .run(false, false, false);
 
     if (repo_deletion_failed) {
@@ -427,6 +475,7 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
          core::print("[ERROR]: No profile config removed!\n");
     }
     //
+    fs_err.clear();
     fs::remove_all(dotty.data_d/profile_name, fs_err);
     if (fs_err) {
         core::print("[ERROR]: No profile storage data removed!\n");

@@ -11,11 +11,22 @@ NAMESPACE_START(core)
 // returns subtring until first space
 inline std::string get_first_word(strview strv) {
     for (usize i=0;  i < strv.size();  ++i) {
-        if (::isspace(strv[i])) {
-           return strv.substr(0, i).data();
+        if (::isspace(static_cast<unsigned char>(strv[i]))) {
+           return std::string(strv.substr(0, i));
         }
     }
-    return strv.data();
+    return std::string(strv);
+}
+
+// Quote one argument for the POSIX shell used by CmdStream.
+inline std::string shell_quote(strview value) {
+    std::string quoted{"'"};
+    for (char c : value) {
+        if (c == '\'') quoted += "'\\\"'\\\"'";
+        else quoted += c;
+    }
+    quoted += '\'';
+    return quoted;
 }
 
 

@@ -54,7 +54,8 @@ private:
 
     LexRes lexDirectiveLine();
     LexRes lexAction();
-    LexRes lexString();
+    LexRes lexString();       // double-quoted "..."
+    LexRes lexSingleString(); // single-quoted '...' (used by @exec)
     LexRes lexCopier();
     LexRes lexLinker();
     LexRes lexDirCopier();

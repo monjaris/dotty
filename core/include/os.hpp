@@ -133,7 +133,8 @@ inline bool in_path(const char* name) {
     return wait_proc(pid) == 0;
 }
 
-// load $HOME to static constant once and return it
+// load $HOME to static constant once and return it.
+// Returns empty string (never throws) when HOME is unset — callers must check.
 inline const char* userHomePath() {
     static const char* home_path_cache = nullptr;
     if (home_path_cache != nullptr) return home_path_cache;
@@ -145,52 +146,59 @@ inline const char* userHomePath() {
         home_env = ::getenv("USERPROFILE");
     #endif
 
-    if (home_env == nullptr) {
-        throw std::runtime_error("HOME environment variable is not set!");
-    } else {
-        return (home_path_cache = home_env);
+    if (home_env == nullptr || home_env[0] == '\0') {
+        home_path_cache = "";
+        return home_path_cache;
     }
+    return (home_path_cache = home_env);
 }
 
 
-// get configuration directory based on the OS
+// get configuration directory based on the OS (never throws)
 inline fs::path get_config_d() {
     #define NO_PATH "////////////////////////"
     static fs::path os_config_dir = NO_PATH;
-    // operate once and keep in static storage
     if (os_config_dir == NO_PATH) {
         #if defined(DOTTY_FOSS_UNIX)
             const char* env = ::getenv("XDG_CONFIG_HOME");
-            if (env) return os_config_dir = env;
-            else return os_config_dir = cat_path(userHomePath(), ".config");
+            if (env && env[0]) return os_config_dir = env;
+            const char* home = userHomePath();
+            if (home && home[0]) return os_config_dir = cat_path(home, ".config");
+            return os_config_dir = ".config";
         #elif defined(__APPLE__)
-            return os_config_dir = cat_path(userHomePath(), "Library/Preferences");
+            const char* home = userHomePath();
+            if (home && home[0]) return os_config_dir = cat_path(home, "Library/Preferences");
+            return os_config_dir = "Library/Preferences";
         #elif defined(_WIN32)
-            return os_config_dir = cat_path(userHomePath(), "AppData/Roaming");
+            const char* home = userHomePath();
+            if (home && home[0]) return os_config_dir = cat_path(home, "AppData/Roaming");
+            return os_config_dir = "AppData/Roaming";
         #else
-            return os_config_dir = cat_path(userHomePath(), ".config");
+            const char* home = userHomePath();
+            if (home && home[0]) return os_config_dir = cat_path(home, ".config");
+            return os_config_dir = ".config";
         #endif
     }
     else return os_config_dir;
 }
 
 
-// get system editor with nice fallbacks
+// get system editor with nice fallbacks — never returns nullptr
+// (callers pass this into std::string / value_or; nullptr is UB there)
 inline const char* get_txt_editor() {
-    static const char* env_visual = ::getenv("VISUAL");
-    static const char* env_editor = ::getenv("EDITOR");
     static const char* text_editor = nullptr;
+    if (text_editor != nullptr) return text_editor;
 
-    if (text_editor == nullptr) {
-        if (env_editor)  return (text_editor = env_editor);
-        if (env_visual)  return (text_editor = env_visual);
-        else if (!::system("which nano >" NULLDEV)) return (text_editor = "nano");
-        else if (!::system("which vi >" NULLDEV))   return (text_editor = "vi");
-        else return nullptr;
-    }
-    else {
-        return text_editor;
-    }
+    const char* env_editor = ::getenv("EDITOR");
+    if (env_editor && env_editor[0]) return (text_editor = env_editor);
+
+    const char* env_visual = ::getenv("VISUAL");
+    if (env_visual && env_visual[0]) return (text_editor = env_visual);
+
+    if (!::system("which nano >" NULLDEV)) return (text_editor = "nano");
+    if (!::system("which vi >" NULLDEV))   return (text_editor = "vi");
+    // last-resort non-null fallback
+    return (text_editor = "vi");
 }
 
 

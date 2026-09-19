@@ -3,6 +3,29 @@
 
 using CM = ConfigManager;
 
+CM::ConfigManager()
+    : HOME([&]() -> fs::path {
+          const char* h = core::os::userHomePath();
+          if (h == nullptr || h[0] == '\0') return fs::path{};
+          return fs::path(h);
+      }())
+    , config_d()
+    , data_d()
+{
+    if (HOME.empty()) {
+        // Leave paths empty; load()/init will report a clear error.
+        return;
+    }
+    // Prefer XDG_CONFIG_HOME when set; otherwise ~/.config/dotty
+    const char* xdg = ::getenv("XDG_CONFIG_HOME");
+    if (xdg && xdg[0]) {
+        config_d = fs::path(xdg) / "dotty";
+    } else {
+        config_d = HOME / ".config" / "dotty";
+    }
+    data_d = HOME / ".local" / "share" / "dotty";
+}
+
 Report CM::validateProfileName(const std::string& name) {
     if (name == Profile::NOT) {
         return Report::Bad("Profile can't be assigned to profile sentinel('{}')", Profile::NOT);
@@ -186,7 +209,7 @@ Report CM::setActiveProfile(const strview name) {
     else if (name!=Profile::NOT && !profileExists(name)) {
         return report.Bad("Can't switch to '{}': Profile doesn't exist!", name);
     }
-    else if (m_current_profile.name == name.data()) {
+    else if (m_current_profile.name == name) {
         report.addComplain("profile '{}' is already active", name);
         return report.Good();
     }
@@ -216,7 +239,7 @@ Report CM::listProfiles(bool name, bool repo, bool url, bool gh) {
     for (uint32 i=0;  i < m_profiles.size();  ++i) {
         auto prof = m_profiles[i];
         // if the current iterated profile is active one
-        bool active = activeProf() == getProfileByName(prof.name)->name;
+        bool active = (activeProf() == prof.name);
 
         std::string msg;
         // TODO: make them switch-case
@@ -305,87 +328,169 @@ bool CM::detectPreinitConfig() {
 Report CM::reloadConfig() {
     core::debug("", __FUNCTION__, "()...");
 
-    core::debug("Loading master config..\n");
-    std::ifstream master(HOME/master_src);
-    MasterConfigParser master_cfman;
-    master_cfman.rParse(HOME/master_src).printOnBad();
-    master_cfman.rEval().printComplains();
-    master_cfman.rValidateConfig().printOnBad();
+    if (HOME.empty()) {
+        return Report::Bad("HOME is not set");
+    }
 
-    // register loaded profiles
+    const fs::path master_path = HOME / master_src;
+    std::error_code ec;
+    if (!fs::exists(master_path, ec) || core::is_file_empty(master_path)) {
+        m_profiles.clear();
+        m_current_profile = Profile{Profile::NOT, "", false, false};
+        return Report::Good();
+    }
+
+    core::debug("Loading master config..\n");
+    MasterConfigParser master_cfman;
+    if (auto r = master_cfman.rParse(master_path); r.error()) {
+        r.printComplains();
+        return Report::Bad("Failed to parse master config");
+    }
+    master_cfman.rEval().printComplains();
+    master_cfman.rValidateConfig().printComplains();
+
     m_profiles = master_cfman.profiles;
 
-    // set active profile based on the config
     auto it = master_cfman.vars.find(MasterConfigParser::P_ACTIVE_PROF);
-    if (it != master_cfman.vars.end() && (it->second != Profile::NOT)) {
+    if (it != master_cfman.vars.end() && it->second != Profile::NOT) {
         if (Profile* found_prof = getProfileByName(strview(it->second))) {
             m_current_profile = *found_prof;
+        } else {
+            m_current_profile = Profile{Profile::NOT, "", false, false};
         }
     } else {
-        return Report::Bad("Couldn't find active profile");
+        m_current_profile = Profile{Profile::NOT, "", false, false};
     }
 
     return Report::Good();
 }
 
 
-// Load dotty configuration and debug
-void CM::load(bool reg) {
+
+// Load dotty configuration. Never throws; returns Report on failure.
+Report CM::load(bool reg) {
     core::debug("", __FUNCTION__, "()...");
 
-    std::string active_prof = activeProf();
-    fs::path master_path = HOME/master_src;
+    if (HOME.empty()) {
+        return Report::Bad(
+            "HOME environment variable is not set. "
+            "Cannot locate user configuration directories."
+        );
+    }
 
-    // Create needed directories&&files if not exist
-    if(reg) if (!fs::exists(master_path)) core::new_file(master_path);
-    core::ensure_directories(config_d);
-    core::ensure_directories(data_d);
+    fs::path master_path = HOME / master_src;
+
+    // Create needed directories && files if requested
+    if (reg) {
+        std::error_code ec;
+        if (!fs::exists(master_path, ec)) {
+            core::new_file(master_path);
+        }
+        if (!core::ensure_directories(config_d)) {
+            return Report::Bad("Could not create config directory: '{}'", config_d.string());
+        }
+        if (!core::ensure_directories(data_d)) {
+            return Report::Bad("Could not create data directory: '{}'", data_d.string());
+        }
+    }
+
     for (auto& prof : m_profiles) {
-        core::ensure_directories(config_d/prof.name);
-        if (!fs::exists(config_d/prof.name/config_src)) core::new_file(config_d/prof.name/config_src);
-        core::ensure_directories(data_d/prof.name/data_cfgref);
+        core::ensure_directories(config_d / prof.name);
+        std::error_code ec;
+        if (!fs::exists(config_d / prof.name / config_src, ec)) {
+            core::new_file(config_d / prof.name / config_src);
+        }
+        core::ensure_directories(data_d / prof.name / data_cfgref);
+    }
+
+    // Master config may not exist yet (fresh init) — that is fine.
+    std::error_code ec;
+    if (!fs::exists(master_path, ec) || core::is_file_empty(master_path)) {
+        core::debug("Master config missing or empty — no profiles loaded yet.\n");
+        m_profiles.clear();
+        m_current_profile = Profile{Profile::NOT, "", false, false};
+        return Report::Good();
     }
 
     core::debug("Loading master config..\n");
-    std::ifstream master(master_path);
     MasterConfigParser mcparser;
-    mcparser.rParse(master_path).printOnBad();
+    if (auto r = mcparser.rParse(master_path); r.error()) {
+        r.printComplains();
+        return Report::Bad("Failed to parse master config '{}'", master_path.string());
+    }
     mcparser.rEval().printComplains();
-    mcparser.rValidateConfig().printOnBad();
+    mcparser.rValidateConfig().printComplains();
 
-    // load profiles
     m_profiles = mcparser.profiles;
 
-    // set active profile based on the config
+    // Set active profile directly — avoid re-entrant setActiveProfile() during load.
     auto it = mcparser.vars.find(MasterConfigParser::P_ACTIVE_PROF);
-    if (it != mcparser.vars.end()) {
-        setActiveProfile(it->second.data()).mute();
-    } else if (!reg) core::terminate("dotty.load: setProfile(it->second): Error!");
+    if (it != mcparser.vars.end() && it->second != Profile::NOT) {
+        if (Profile* found = getProfileByName(it->second)) {
+            m_current_profile = *found;
+        } else {
+            m_current_profile = Profile{};
+        }
+    } else {
+        m_current_profile = Profile{};
+    }
+
+    return Report::Good();
 }
 
 
+// Run collected @exec commands via posix_spawn (no shell).
+Report CM::runExecCommands() {
+    Report report;
+    if (exec_commands.empty()) return report;
 
-// Copy all source files to destination files, pairs defined by a member
-std::array<std::vector<SrcDest>, 8>
-CM::systemToRepo()
+    core::print("Running ", exec_commands.size(), " @exec command(s)...\n");
+    for (const auto& cmdline : exec_commands) {
+        core::print("  $ ", cmdline, "\n");
+
+        // Tokenize with wordexp (POSIX, no shell meta-execution of pipes/redirs
+        // beyond word expansion). Then posix_spawnp the resulting argv.
+        core::os::CmdTokens tokens(cmdline.c_str());
+        if (!tokens.parse(WRDE_NOCMD)) {
+            report.addComplain("@exec: failed to parse command: '{}'", cmdline);
+            continue;
+        }
+
+        // Build argv for spawn_child
+        const char* const* words = tokens.words();
+        if (tokens.count() == 0 || words[0] == nullptr) {
+            report.addComplain("@exec: empty argv for '{}'", cmdline);
+            continue;
+        }
+
+        pid_t pid = core::os::spawn_child(words[0], words + 1);
+        if (pid == -1) {
+            report.addComplain("@exec: posix_spawn failed for '{}'", cmdline);
+            continue;
+        }
+        int32 status = core::os::wait_proc(pid);
+        if (status != 0) {
+            report.addComplain("@exec: '{}' exited with status {}", cmdline, status);
+        }
+    }
+    return report;
+}
+
+
+// Copy/link files from system targets into the profile repository.
+// Never throws; returns Report summarizing failures.
+Report CM::systemToRepo()
 {
-    static std::vector<SrcDest> succeed_cp_f; succeed_cp_f.clear();
-    static std::vector<SrcDest> succeed_cp_d; succeed_cp_d.clear();
-    static std::vector<SrcDest> succeed_ln_f; succeed_ln_f.clear();
-    static std::vector<SrcDest> succeed_ln_d; succeed_ln_d.clear();
-    static std::vector<SrcDest> succeed_su_cp_f; succeed_su_cp_f.clear();
-    static std::vector<SrcDest> succeed_su_cp_d; succeed_su_cp_d.clear();
-    static std::vector<SrcDest> succeed_su_ln_f; succeed_su_ln_f.clear();
-    static std::vector<SrcDest> succeed_su_ln_d; succeed_su_ln_d.clear();
-
+    Report report;
     COMPTIME_STR ERR = "Skipping target: ";
-    auto should_skip = [ERR](const fs::path& src, const fs::path& dest, bool accept_dirs) ->bool {
+
+    auto should_skip = [&](const fs::path& src, const fs::path& dest, bool accept_dirs) -> bool {
         std::error_code ec;
-        const fs::path normalized = dest.lexically_normal();
         if (!fs::exists(src, ec) || ec) {
-            core::print(ERR, "source does not exist or cannot be inspected: '", src.string(), "'\n");
+            core::print(ERR, "source does not exist: '", src.string(), "'\n");
             return true;
         }
+        const fs::path normalized = dest.lexically_normal();
         if (dest.empty() || dest.is_absolute() || normalized.empty()
             || normalized == "." || normalized.begin()->string() == "..") {
             core::print(ERR, "destination must stay inside the profile repository!\n");
@@ -398,7 +503,6 @@ CM::systemToRepo()
         return false;
     };
 
-    // prime the sudo credential cache ONCE up front instead of prompting per-file
     bool have_sudo_targets = !sudo_files_to_copy.empty() || !sudo_files_to_link.empty()
                            || !sudo_dirs_to_copy.empty()  || !sudo_dirs_to_link.empty();
     if (have_sudo_targets) {
@@ -406,121 +510,159 @@ CM::systemToRepo()
         core::CmdStream{}.add("sudo -v").run(false, false, true);
     }
 
-    fs::path repo_d = data_d/activeProf();
-
-    // COPY-FILES
-    for (auto [src, dest] : files_to_copy) {
-        if (should_skip(src, dest, false)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        try {
-            fs::copy_file(src, dest, fs::copy_options::update_existing);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n"); continue;
-        }
-        succeed_cp_f.emplace_back(src, dest);
-    }
-    // LINK-FILES
-    for (auto [src, dest] : files_to_link) {
-        if (should_skip(src, dest, false)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        try {
-            fs::copy_file(src, dest, fs::copy_options::overwrite_existing);
-            if (fs::exists(src) || fs::is_symlink(src)) fs::remove(src);
-            fs::create_symlink(dest, src);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n"); continue;
-        }
-        succeed_ln_f.emplace_back(src, dest);
-    }
-    // COPY-DIRECTORIES
-    for (auto [src, dest] : dirs_to_copy) {
-        if (should_skip(src, dest, true)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        try {
-            core::copy_directory(src, dest, true);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n"); continue;
-        }
-        succeed_cp_d.emplace_back(src, dest);
-    }
-    // LINK-DIRECTORIES
-    for (auto [src, dest] : dirs_to_link) {
-        if (should_skip(src, dest, true)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        try {
-            core::copy_directory(src, dest, false);
-            if (fs::exists(src) || fs::is_symlink(src)) fs::remove_all(src);
-            fs::create_directory_symlink(dest, src);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n"); continue;
-        }
-        succeed_ln_d.emplace_back(src, dest);
+    fs::path repo_d = data_d / activeProf();
+    if (!core::ensure_directories(repo_d)) {
+        return Report::Bad("Could not create repository directory: '{}'", repo_d.string());
     }
 
-    // SUDO-COPY-FILES — our own fs:: calls can't escalate privilege, so shell out
-    for (auto [src, dest] : sudo_files_to_copy) {
-        if (should_skip(src, dest, false)) continue;
+    auto do_copy_file = [&](const fs::path& src, fs::path dest, bool use_sudo) {
         dest = repo_d / dest;
         core::ensure_directories(dest.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo cp {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
-        .run(false, false, true);
-        if (rc != 0) { core::print(ERR, "sudo cp failed for '", src.string(), "'\n"); continue; }
-        succeed_su_cp_f.emplace_back(src, dest);
-    }
-    // SUDO-LINK-FILES
-    for (auto [src, dest] : sudo_files_to_link) {
-        if (should_skip(src, dest, false)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo cp -f {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
-            .add("sudo rm -f {}", core::shell_quote(src.string()))
-            .add("sudo ln -s {} {}", core::shell_quote(dest.string()), core::shell_quote(src.string()))
-        .run(true, false, true);
-        if (rc != 0) { core::print(ERR, "sudo ln failed for '", src.string(), "'\n"); continue; }
-        succeed_su_ln_f.emplace_back(src, dest);
-    }
-    // SUDO-COPY-DIRECTORIES
-    for (auto [src, dest] : sudo_dirs_to_copy) {
-        if (should_skip(src, dest, true)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
-        .run(false, false, true);
-        if (rc != 0) { core::print(ERR, "sudo cp -r failed for '", src.string(), "'\n"); continue; }
-        succeed_su_cp_d.emplace_back(src, dest);
-    }
-    // SUDO-LINK-DIRECTORIES
-    for (auto [src, dest] : sudo_dirs_to_link) {
-        if (should_skip(src, dest, true)) continue;
-        dest = repo_d / dest;
-        core::ensure_directories(dest.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
-            .add("sudo rm -rf {}", core::shell_quote(src.string()))
-            .add("sudo ln -s {} {}", core::shell_quote(dest.string()), core::shell_quote(src.string()))
-        .run(true, false, true);
-        if (rc != 0) { core::print(ERR, "sudo ln failed for '", src.string(), "'\n"); continue; }
-        succeed_su_ln_d.emplace_back(src, dest);
-    }
-
-    return std::array<std::vector<SrcDest>, 8>{
-        succeed_cp_f, succeed_ln_f, succeed_cp_d, succeed_ln_d,
-        succeed_su_cp_f, succeed_su_ln_f, succeed_su_cp_d, succeed_su_ln_d
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo cp {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
+            .run(false, false, true);
+            if (rc != 0) {
+                report.addComplain("sudo cp failed for '{}'", src.string());
+            } else {
+                core::print("  [sudo-copy] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        } else {
+            if (!core::copy_file_safe(src, dest, fs::copy_options::update_existing)) {
+                report.addComplain("copy failed for '{}'", src.string());
+            } else {
+                core::print("  [copy] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        }
     };
+
+    auto do_link_file = [&](const fs::path& src, fs::path dest, bool use_sudo) {
+        dest = repo_d / dest;
+        core::ensure_directories(dest.parent_path());
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo cp -f {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
+                .add("sudo rm -f {}", core::shell_quote(src.string()))
+                .add("sudo ln -s {} {}", core::shell_quote(dest.string()), core::shell_quote(src.string()))
+            .run(true, false, true);
+            if (rc != 0) {
+                report.addComplain("sudo ln failed for '{}'", src.string());
+            } else {
+                core::print("  [sudo-link] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        } else {
+            std::error_code ec;
+            if (!core::copy_file_safe(src, dest, fs::copy_options::overwrite_existing)) {
+                report.addComplain("copy-before-link failed for '{}'", src.string());
+                return;
+            }
+            if (fs::exists(src, ec) || fs::is_symlink(src, ec)) {
+                fs::remove(src, ec);
+            }
+            fs::create_symlink(dest, src, ec);
+            if (ec) {
+                report.addComplain("symlink failed for '{}': {}", src.string(), ec.message());
+            } else {
+                core::print("  [link] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        }
+    };
+
+    auto do_copy_dir = [&](const fs::path& src, fs::path dest, bool use_sudo) {
+        dest = repo_d / dest;
+        core::ensure_directories(dest.parent_path());
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
+            .run(false, false, true);
+            if (rc != 0) {
+                report.addComplain("sudo cp -r failed for '{}'", src.string());
+            } else {
+                core::print("  [sudo-copy-dir] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        } else {
+            if (!core::copy_directory(src, dest, true)) {
+                report.addComplain("directory copy failed for '{}'", src.string());
+            } else {
+                core::print("  [copy-dir] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        }
+    };
+
+    auto do_link_dir = [&](const fs::path& src, fs::path dest, bool use_sudo) {
+        dest = repo_d / dest;
+        core::ensure_directories(dest.parent_path());
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
+                .add("sudo rm -rf {}", core::shell_quote(src.string()))
+                .add("sudo ln -s {} {}", core::shell_quote(dest.string()), core::shell_quote(src.string()))
+            .run(true, false, true);
+            if (rc != 0) {
+                report.addComplain("sudo ln -s (dir) failed for '{}'", src.string());
+            } else {
+                core::print("  [sudo-link-dir] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        } else {
+            std::error_code ec;
+            if (!core::copy_directory(src, dest, false)) {
+                report.addComplain("directory copy-before-link failed for '{}'", src.string());
+                return;
+            }
+            if (fs::exists(src, ec) || fs::is_symlink(src, ec)) {
+                fs::remove_all(src, ec);
+            }
+            fs::create_directory_symlink(dest, src, ec);
+            if (ec) {
+                report.addComplain("directory symlink failed for '{}': {}", src.string(), ec.message());
+            } else {
+                core::print("  [link-dir] ", src.string(), " -> ", dest.string(), "\n");
+            }
+        }
+    };
+
+    for (auto& [src, dest] : files_to_copy) {
+        if (should_skip(src, dest, false)) continue;
+        do_copy_file(src, dest, false);
+    }
+    for (auto& [src, dest] : files_to_link) {
+        if (should_skip(src, dest, false)) continue;
+        do_link_file(src, dest, false);
+    }
+    for (auto& [src, dest] : dirs_to_copy) {
+        if (should_skip(src, dest, true)) continue;
+        do_copy_dir(src, dest, false);
+    }
+    for (auto& [src, dest] : dirs_to_link) {
+        if (should_skip(src, dest, true)) continue;
+        do_link_dir(src, dest, false);
+    }
+    for (auto& [src, dest] : sudo_files_to_copy) {
+        if (should_skip(src, dest, false)) continue;
+        do_copy_file(src, dest, true);
+    }
+    for (auto& [src, dest] : sudo_files_to_link) {
+        if (should_skip(src, dest, false)) continue;
+        do_link_file(src, dest, true);
+    }
+    for (auto& [src, dest] : sudo_dirs_to_copy) {
+        if (should_skip(src, dest, true)) continue;
+        do_copy_dir(src, dest, true);
+    }
+    for (auto& [src, dest] : sudo_dirs_to_link) {
+        if (should_skip(src, dest, true)) continue;
+        do_link_dir(src, dest, true);
+    }
+
+    return report;
 }
 
 
-
-// Copy/link files/directories from repo(config storage) to their system targets
-void CM::repoToSystem()
+// Copy/link files from the profile repository back to system targets.
+// Never throws; returns Report summarizing failures.
+Report CM::repoToSystem()
 {
+    Report report;
     COMPTIME_STR ERR = "Skipping target: ";
     const fs::path repo_d = data_d / activeProf();
 
@@ -528,93 +670,117 @@ void CM::repoToSystem()
         !sudo_files_to_copy.empty() || !sudo_files_to_link.empty() ||
         !sudo_dirs_to_copy.empty()  || !sudo_dirs_to_link.empty()
     );
-
     if (have_sudo_targets) {
         core::print("This profile has @sudo entries — you may be asked for your password.\n");
-        core::CmdStream{}.add("sudo -v").run(false, false);
+        core::CmdStream{}.add("sudo -v").run(false, false, true);
     }
 
-    // COPY-FILES
-    for (auto [target, stored] : files_to_copy) {
+    auto apply_copy_file = [&](const fs::path& target, const fs::path& stored, bool use_sudo) {
         const fs::path src = repo_d / stored;
-        core::ensure_directories(target.parent_path());
-        try {
-            fs::copy_file(src, target, fs::copy_options::overwrite_existing);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n");
+        std::error_code ec;
+        if (!fs::exists(src, ec)) {
+            core::print(ERR, "stored file missing: '", src.string(), "'\n");
+            return;
         }
-    }
-    // LINK-FILES
-    for (auto [target, stored] : files_to_link) {
-        const fs::path src = repo_d / stored;
         core::ensure_directories(target.parent_path());
-        try {
-            if (fs::exists(target) || fs::is_symlink(target)) fs::remove(target);
-            fs::create_symlink(src, target);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n");
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo cp {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
+            .run(false, false, true);
+            if (rc != 0) report.addComplain("sudo cp failed for '{}'", src.string());
+            else core::print("  [sudo-copy] ", src.string(), " -> ", target.string(), "\n");
+        } else {
+            if (!core::copy_file_safe(src, target)) {
+                report.addComplain("copy failed for '{}'", src.string());
+            } else {
+                core::print("  [copy] ", src.string(), " -> ", target.string(), "\n");
+            }
         }
-    }
-    // COPY-DIRECTORIES
-    for (auto [target, stored] : dirs_to_copy) {
-        const fs::path src = repo_d / stored;
-        core::ensure_directories(target.parent_path());
-        try {
-            core::copy_directory(src, target, false);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n");
-        }
-    }
-    // LINK-DIRECTORIES
-    for (auto [target, stored] : dirs_to_link) {
-        const fs::path src = repo_d / stored;
-        core::ensure_directories(target.parent_path());
-        try {
-            if (fs::exists(target) || fs::is_symlink(target)) fs::remove_all(target);
-            fs::create_directory_symlink(src, target);
-        } catch (const std::exception& e) {
-            core::print(ERR, e.what(), "\n");
-        }
-    }
+    };
 
-    // SUDO-COPY-FILES
-    for (auto [target, stored] : sudo_files_to_copy) {
+    auto apply_link_file = [&](const fs::path& target, const fs::path& stored, bool use_sudo) {
         const fs::path src = repo_d / stored;
+        std::error_code ec;
+        if (!fs::exists(src, ec)) {
+            core::print(ERR, "stored file missing: '", src.string(), "'\n");
+            return;
+        }
         core::ensure_directories(target.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo cp {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
-        .run(false, false, true);
-        if (rc != 0) core::print(ERR, "sudo cp failed for '", src.string(), "'\n");
-    }
-    // SUDO-LINK-FILES
-    for (auto [target, stored] : sudo_files_to_link) {
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo rm -f {}", core::shell_quote(target.string()))
+                .add("sudo ln -s {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
+            .run(true, false, true);
+            if (rc != 0) report.addComplain("sudo ln failed for '{}'", src.string());
+            else core::print("  [sudo-link] ", src.string(), " -> ", target.string(), "\n");
+        } else {
+            if (fs::exists(target, ec) || fs::is_symlink(target, ec)) {
+                fs::remove(target, ec);
+            }
+            fs::create_symlink(src, target, ec);
+            if (ec) report.addComplain("symlink failed for '{}': {}", target.string(), ec.message());
+            else core::print("  [link] ", src.string(), " -> ", target.string(), "\n");
+        }
+    };
+
+    auto apply_copy_dir = [&](const fs::path& target, const fs::path& stored, bool use_sudo) {
         const fs::path src = repo_d / stored;
+        std::error_code ec;
+        if (!fs::exists(src, ec)) {
+            core::print(ERR, "stored dir missing: '", src.string(), "'\n");
+            return;
+        }
         core::ensure_directories(target.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo rm -f {}", core::shell_quote(target.string()))
-            .add("sudo ln -s {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
-        .run(true, false, true);
-        if (rc != 0) core::print(ERR, "sudo ln failed for '", src.string(), "'\n");
-    }
-    // SUDO-COPY-DIRECTORIES
-    for (auto [target, stored] : sudo_dirs_to_copy) {
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
+            .run(false, false, true);
+            if (rc != 0) report.addComplain("sudo cp -r failed for '{}'", src.string());
+            else core::print("  [sudo-copy-dir] ", src.string(), " -> ", target.string(), "\n");
+        } else {
+            if (!core::copy_directory(src, target, false)) {
+                report.addComplain("directory copy failed for '{}'", src.string());
+            } else {
+                core::print("  [copy-dir] ", src.string(), " -> ", target.string(), "\n");
+            }
+        }
+    };
+
+    auto apply_link_dir = [&](const fs::path& target, const fs::path& stored, bool use_sudo) {
         const fs::path src = repo_d / stored;
+        std::error_code ec;
+        if (!fs::exists(src, ec)) {
+            core::print(ERR, "stored dir missing: '", src.string(), "'\n");
+            return;
+        }
         core::ensure_directories(target.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
-        .run(false, false, true);
-        if (rc != 0) core::print(ERR, "sudo cp -r failed for '", src.string(), "'\n");
-    }
-    // SUDO-LINK-DIRECTORIES
-    for (auto [target, stored] : sudo_dirs_to_link) {
-        const fs::path src = repo_d / stored;
-        core::ensure_directories(target.parent_path());
-        int32 rc = core::CmdStream{}
-            .add("sudo rm -rf {}", core::shell_quote(target.string()))
-            .add("sudo ln -s {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
-        .run(true, false, true);
-        if (rc != 0) core::print(ERR, "sudo ln failed for '", src.string(), "'\n");
-    }
+        if (use_sudo) {
+            int32 rc = core::CmdStream{}
+                .add("sudo rm -rf {}", core::shell_quote(target.string()))
+                .add("sudo ln -s {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
+            .run(true, false, true);
+            if (rc != 0) report.addComplain("sudo ln -s (dir) failed for '{}'", src.string());
+            else core::print("  [sudo-link-dir] ", src.string(), " -> ", target.string(), "\n");
+        } else {
+            if (fs::exists(target, ec) || fs::is_symlink(target, ec)) {
+                fs::remove_all(target, ec);
+            }
+            fs::create_directory_symlink(src, target, ec);
+            if (ec) report.addComplain("directory symlink failed for '{}': {}", target.string(), ec.message());
+            else core::print("  [link-dir] ", src.string(), " -> ", target.string(), "\n");
+        }
+    };
+
+    for (auto& [target, stored] : files_to_copy)  apply_copy_file(target, stored, false);
+    for (auto& [target, stored] : files_to_link)  apply_link_file(target, stored, false);
+    for (auto& [target, stored] : dirs_to_copy)   apply_copy_dir(target, stored, false);
+    for (auto& [target, stored] : dirs_to_link)   apply_link_dir(target, stored, false);
+    for (auto& [target, stored] : sudo_files_to_copy) apply_copy_file(target, stored, true);
+    for (auto& [target, stored] : sudo_files_to_link) apply_link_file(target, stored, true);
+    for (auto& [target, stored] : sudo_dirs_to_copy)  apply_copy_dir(target, stored, true);
+    for (auto& [target, stored] : sudo_dirs_to_link)  apply_link_dir(target, stored, true);
+
+    return report;
 }
 
 

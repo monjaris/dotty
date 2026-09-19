@@ -56,7 +56,7 @@ LexRes DL::lexAction() {
 
 
 LexRes DL::lexString() {
-    m_step();
+    m_step(); // skip opening "
     std::string str;
     while (m_checks()) {
         if (m_seek() == '"') {
@@ -64,7 +64,26 @@ LexRes DL::lexString() {
             return LexRes::Good(str);
         }
         if (str.size() > PATH_MAX) {
-            // "String length is beyond platform's maximum {PATH_MAX}"
+            return LexRes::Bad();
+        }
+        str += m_seek();
+        m_step();
+    }
+
+    return LexRes::Bad();
+}
+
+
+// Single-quoted string — required by @exec 'command here'
+LexRes DL::lexSingleString() {
+    m_step(); // skip opening '
+    std::string str;
+    while (m_checks()) {
+        if (m_seek() == '\'') {
+            m_step();
+            return LexRes::Good(str);
+        }
+        if (str.size() > PATH_MAX) {
             return LexRes::Bad();
         }
         str += m_seek();
@@ -149,21 +168,27 @@ LexRes DL::lexEqual() {
 
 
 std::string DL::RemoveComment(std::string line) {
-    std::vector<int32> quotes;
-    quotes.reserve(128);
+    // Track whether we are inside double or single quotes so that
+    // '#' inside a string is not treated as a comment start.
+    bool in_dquote = false;
+    bool in_squote = false;
 
-    for (uint32 i=0;  i < line.size();  ++i) {
-        if (line[i] == '\"') quotes.push_back(i);
-
-        if (core::is_even(quotes.size())) {
-            if (line[i] == CMNT) {
-                // handle for directive(#!)
-                if (i == line.size()-1) {
-                    return line.substr(0, i);
-                } else if(line[i+1] != '!') {
-                    return line.substr(0, i);
-                }
+    for (uint32 i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        if (c == '"' && !in_squote) {
+            in_dquote = !in_dquote;
+            continue;
+        }
+        if (c == '\'' && !in_dquote) {
+            in_squote = !in_squote;
+            continue;
+        }
+        if (!in_dquote && !in_squote && c == CMNT) {
+            // preserve directive lines that start with "#!"
+            if (i + 1 < line.size() && line[i + 1] == '!') {
+                continue;
             }
+            return line.substr(0, i);
         }
     }
 
@@ -222,14 +247,24 @@ Report DL::lexMain() {
                 report.addComplain("Couldn't lex action"); continue;
             }
         }
-        // Lex STRING
+        // Lex STRING (double-quoted)
         else if (m_seek() == '"') {
             auto lex = lexString();
             if (lex.success()) {
                 maintok.name = lex.val();
                 maintok.type = Token::STRING;
             } else {
-                report.addComplain("Couldn't lex string"); continue;
+                report.addComplain("Couldn't lex double-quoted string"); continue;
+            }
+        }
+        // Lex STRING (single-quoted) — used by @exec
+        else if (m_seek() == '\'') {
+            auto lex = lexSingleString();
+            if (lex.success()) {
+                maintok.name = lex.val();
+                maintok.type = Token::STRING;
+            } else {
+                report.addComplain("Couldn't lex single-quoted string"); continue;
             }
         }
         // Lex COPIER && DIR_COPIER

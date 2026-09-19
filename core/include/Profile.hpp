@@ -11,6 +11,8 @@ struct Profile {
     bool is_pub = false;  // repo visibility is public or not
     bool is_ext = false;  // the profile repo is owned by user or not
 
+    Profile() : name(NOT), repo_url(), is_pub(false), is_ext(false) {}
+
     Profile(
         const std::string& name,
         const std::string& repo_url,

@@ -2,100 +2,75 @@
 #include "CmdStream.hpp"
 
 int32 CmdLine::do_init() {
-    if (!core::is_file_empty(dotty.HOME/dotty.master_src)) {
-        if (!core::ask_confirm(
-            "You already have initialized dotty once in yout system!\n"
-            "Wanna reset it and continue do initialize it again?",
-            false
-        )) {
-            core::terminate("You can't run master config preconfiguired!\n");
-        }
-        else {
-            core::empty_file(dotty.HOME/dotty.master_src);
-            core::print("Resetted '", dotty.HOME/dotty.master_src, "'\n");
-        }
-    }
+    // Init only bootstraps local directories and an empty master config.
+    // Profile creation is explicit via `dotty profile new`.
 
-    // Check if internet is connected
-    if (!core::internet_is_connected()) {
-        core::terminate(
-            "Your device is not connected to the internet!\n",
-            "Repository creation requires a wifi connection."
+    if (dotty.HOME.empty()) {
+        core::print(
+            "[Error] HOME environment variable is not set.\n"
+            "Cannot initialize dotty without a home directory.\n"
         );
+        return EXIT_FAILURE;
     }
 
+    // Soft dependency checks (warnings only — init itself does not need gh/internet)
     if (!core::os::in_path("gh")) {
-        core::terminate(
-            "[Error] core runtime-dependency '", "\033[31mgithub-cli\033[0m", "' doesn't exist!\n",
-            "You can probably install it with you package manager"
+        core::print(
+            "[Warning] runtime-dependency '\033[31mgithub-cli\033[0m' is not installed.\n"
+            "You will need it later for `dotty profile new` / push / pull.\n"
         );
     }
     if (!core::os::in_path(core::PPRINTER)) {
         core::print(
-            "[Warning] runtime-dependency '\033[31m", core::PPRINTER, "\033[0m' doesn't exist!\n",
-            "You can install it with you package manager or by manually"
+            "[Warning] optional dependency '\033[31m", core::PPRINTER, "\033[0m' is not installed.\n"
         );
     }
 
-    // Create directories if not exist
-    core::ensure_directories(dotty.config_d);
-    core::ensure_directories(dotty.data_d);
+    if (!core::ensure_directories(dotty.config_d)) {
+        core::print("[Error] Could not create config directory: ", dotty.config_d.string(), "\n");
+        return EXIT_FAILURE;
+    }
+    if (!core::ensure_directories(dotty.data_d)) {
+        core::print("[Error] Could not create data directory: ", dotty.data_d.string(), "\n");
+        return EXIT_FAILURE;
+    }
 
-    // Check github authentication status
-    core::debug("Checking GitHub CLI authentication...\n");
-    int32 auth_failed = ::system("gh auth status --hostname github.com >" NULLDEV);
-    if (auth_failed) {
-        core::terminate("gh is not authenticated. Please run 'gh auth login' first.\n");
+    const fs::path master = dotty.HOME / dotty.master_src;
+    std::error_code ec;
+    if (fs::exists(master, ec) && !core::is_file_empty(master)) {
+        if (!core::ask_confirm(
+            "dotty is already initialized (master config exists).\n"
+            "Reset master config and re-initialize?",
+            false
+        )) {
+            core::print("Init aborted — existing configuration kept.\n");
+            return EXIT_FAILURE;
+        }
+        if (!core::empty_file(master)) {
+            core::print("[Error] Could not reset master config: ", master.string(), "\n");
+            return EXIT_FAILURE;
+        }
+        core::print("Reset '", master.string(), "'\n");
     } else {
-        core::debug("GitHub CLI authenticated.\n");
+        // Write a minimal valid master skeleton so later parse does not fail.
+        std::ofstream fo(master, std::ios::out | std::ios::trunc);
+        if (!fo) {
+            core::print("[Error] Could not create master config: ", master.string(), "\n");
+            return EXIT_FAILURE;
+        }
+        fo << "# dotty master configuration\n"
+           << "active-profile = \"[NIL-PROFILE]\"\n"
+           << "config-editor = \"\"\n"
+           << "profile = []\n";
+        fo.close();
     }
 
-    // Get github authenticated username
-    auto get_gh_auth = core::CmdStream {}
-        .add("gh api user --jq '.login'")
-    ;
-    if (get_gh_auth.run(false, true, false) != 0) {
-        core::terminate("Fetching authenticated github username failed!");
-    }
-    const std::string& gh_auth_name = get_gh_auth.output();
-
-
-    // ASK PROFILE-NAME
-    static const std::string ini_prof_default = "main";
-    std::string ini_prof;
-    core::prompt(std::format("Enter profile name[{}]: ", ini_prof_default).c_str(), ini_prof);
-    if (ini_prof.empty()) ini_prof = "main";
-    dotty.validateProfileName(ini_prof).printOnBad().terminateOnBad();
-
-    // ASK REPO-NAME
-    std::string repo_name;
-    core::prompt("Enter a name for your dotty config repo: ", repo_name);
-    dotty.validateRepoName(repo_name).printOnBad().terminateOnBad();
-    const std::string repo_url = core::make_repo_url(gh_auth_name, repo_name);
-    core::debug("URL constructed: ", repo_url);
-
-    // ASK REPO-VISIBILITY
-    int32 vis_inp = 1;
-    core::prompt_number("Enter repo visibility (1: private, 2: public) [1]: ", vis_inp);
-    if (!core::is_any_of(vis_inp, {1, 2})) {
-        core::print("Invalid input. Defaulting to private.\n\n");
-        vis_inp = 1;
-    } else core::print("\n");
-
-    // ASK COMMIT-MESSAGE
-    static const std::string default_commit_msg = "\"Initial commit of this configuration profile\"";
-    std::string commit_msg;
-    core::prompt(std::format("Enter commit message [{}]: ", default_commit_msg).c_str(), commit_msg);
-    if (commit_msg.empty()) commit_msg = default_commit_msg;
-
-    // CREATE NEW PROFILE
-    dotty.newProfile(ini_prof, gh_auth_name, repo_name, bool(vis_inp-1), false, commit_msg.c_str())
-        .printOnBad()
-        .terminateOnBad();
-
-    core::print("Repo '", repo_name, "' created as ", (vis_inp-1)?("public"):("private"), " on GitHub.\n");
-    core::print("Setting ", ini_prof, " active profile\n");
-    dotty.setActiveProfile(ini_prof).printOnBad();
+    core::print("dotty initialized.\n");
+    core::print("  config dir : ", dotty.config_d.string(), "\n");
+    core::print("  data dir   : ", dotty.data_d.string(), "\n");
+    core::print("  master cfg : ", master.string(), "\n");
+    core::print("\nNext step — create a profile:\n");
+    core::print("  dotty profile new --name main --repo my-dotfiles --commit-msg \"init\"\n");
     return EXIT_SUCCESS;
 }
 
@@ -118,77 +93,67 @@ int32 CmdLine::do_init() {
 int32 CmdLine::do_update()
 {
     if (dotty.noProfilesExist()) {
-        core::print("To update a profile you should first have to create a profile\n");
+        core::print("To update a profile you should first create a profile\n");
+        core::print("  tip: dotty profile new --name main --repo my-dotfiles --commit-msg \"init\"\n");
         return EXIT_FAILURE;
     }
     if (dotty.activeProf() == Profile::NOT) {
-        core::print("To update a profile you should first have to have a active profile set\n");
+        core::print("To update a profile you should first set an active profile\n");
+        core::print("  tip: dotty profile switch <name>\n");
         return EXIT_FAILURE;
     }
 
-    DotlangLexer lexer;
-    DotlangParser parser;
-    std::ifstream conf(
-        dotty.config_d/dotty.activeProf()/dotty.config_src,
-        std::ios::in
-    );
-    if (!conf.is_open()) core::terminate("File could not be opened!\n");
-
-    std::string line;
-    while (std::getline(conf, line)) {
-        core::debug("Lexing config...\n");
-        lexer.feed(line);
-        lexer.lexMain().printComplains();
-#if DEBUG_ON
-        core::debug("\n\nLexed tokens:\n");
-        lexer.print();
-#endif
-        parser.feed(lexer.result());
-        core::debug("Parsing tokens...\n");
-        parser.parseMain().printComplains();
-
-        core::debug("Loading parsed lists...\n\n");
-        // regular ones
-        dotty.files_to_copy = parser.copy_files;
-        dotty.files_to_link = parser.link_files;
-        dotty.dirs_to_copy = parser.copy_dirs;
-        dotty.dirs_to_link = parser.link_dirs;
-        // sudo ones
-        dotty.sudo_files_to_copy = parser.sudo_copy_files;
-        dotty.sudo_files_to_link = parser.sudo_link_files;
-        dotty.sudo_dirs_to_copy = parser.sudo_copy_dirs;
-        dotty.sudo_dirs_to_link = parser.sudo_link_dirs;
+    const fs::path conf_path = dotty.config_d / dotty.activeProf() / dotty.config_src;
+    std::error_code ec;
+    if (!fs::exists(conf_path, ec)) {
+        core::print("[Error] Config file does not exist: ", conf_path.string(), "\n");
+        return EXIT_FAILURE;
     }
 
-    enum { CPF, LNF, CPD, LND, SU_CPF, SU_LNF, SU_CPD, SU_LND };
-    auto succeed = dotty.systemToRepo();
-    auto copied_files = succeed[CPF];
-    auto linked_files = succeed[LNF];
-    auto copied_dirs  = succeed[CPD];
-    auto linked_dirs  = succeed[LND];
-    auto sudo_copied_files = succeed[SU_CPF];
-    auto sudo_linked_files = succeed[SU_LNF];
-    auto sudo_copied_dirs  = succeed[SU_CPD];
-    auto sudo_linked_dirs  = succeed[SU_LND];
+    std::ifstream conf(conf_path, std::ios::in);
+    if (!conf.is_open()) {
+        core::print("[Error] Could not open config file: ", conf_path.string(), "\n");
+        return EXIT_FAILURE;
+    }
 
-    auto print_group = [](const char* label, const char* empty_msg, const std::vector<SrcDest>& v) {
-        if (v.empty()) { core::print(empty_msg); return; }
-        core::print(label);
+    // Lex whole file line-by-line, concatenate tokens, single parseMain so
+    // directives on earlier lines enable actions on later lines.
+    DotlangLexer lexer;
+    DotlangParser parser;
+    parser.resetFileState();
 
-        for (auto& [src, dest] : v) {
-            core::print("  '", src.string(), "' -> '", dest.string(), "'\n");
-        }
-    };
+    std::vector<Token> all_tokens;
+    std::string line;
+    while (std::getline(conf, line)) {
+        lexer.feed(line);
+        Report lr = lexer.lexMain();
+        lr.printComplains();
+        auto& toks = lexer.result();
+        all_tokens.insert(all_tokens.end(), toks.begin(), toks.end());
+    }
 
-    print_group("Copied files:\n",              "No files copied!\n",             copied_files);
-    print_group("Copied directories:\n",         "No directories copied!\n",       copied_dirs);
-    print_group("Linked files:\n",               "No files linked!\n",            linked_files);
-    print_group("Linked directories:\n",         "No directories linked!\n",      linked_dirs);
-    print_group("Copied files (sudo):\n",        "No sudo files copied!\n",       sudo_copied_files);
-    print_group("Copied directories (sudo):\n",  "No sudo directories copied!\n", sudo_copied_dirs);
-    print_group("Linked files (sudo):\n",        "No sudo files linked!\n",       sudo_linked_files);
-    print_group("Linked directories (sudo):\n",  "No sudo directories linked!\n", sudo_linked_dirs);
+    parser.feed(std::move(all_tokens));
+    ParseReport pr = parser.parseMain();
+    pr.printComplains();
 
+    // Load parsed lists into ConfigManager
+    dotty.files_to_copy      = std::move(parser.copy_files);
+    dotty.files_to_link      = std::move(parser.link_files);
+    dotty.dirs_to_copy       = std::move(parser.copy_dirs);
+    dotty.dirs_to_link       = std::move(parser.link_dirs);
+    dotty.sudo_files_to_copy = std::move(parser.sudo_copy_files);
+    dotty.sudo_files_to_link = std::move(parser.sudo_link_files);
+    dotty.sudo_dirs_to_copy  = std::move(parser.sudo_copy_dirs);
+    dotty.sudo_dirs_to_link  = std::move(parser.sudo_link_dirs);
+    dotty.exec_commands      = std::move(parser.exec_commands);
+
+    Report apply = dotty.systemToRepo();
+    apply.printOnBad();
+
+    Report exec_r = dotty.runExecCommands();
+    exec_r.printOnBad();
+
+    if (apply.error() || exec_r.error()) return EXIT_FAILURE;
     return EXIT_SUCCESS;
 }
 
@@ -196,80 +161,184 @@ int32 CmdLine::do_update()
 
 int32 CmdLine::do_push(const char* commit_message) {
     if (dotty.activeProf() == Profile::NOT) {
-        core::print("To push a profile, first you have to set active profile");
+        core::print("To push a profile, first set an active profile\n");
         return EXIT_FAILURE;
     }
     if (!core::internet_is_connected()) {
-        core::print("Push operation requires internet connection\n");
+        core::print("Push operation requires an internet connection\n");
         return EXIT_FAILURE;
     }
 
-    core::ensure_directories(dotty.config_d / dotty.activeProf());
-    core::ensure_directories(dotty.data_d / dotty.activeProf() / dotty.data_cfgref);
-    // Copy all config source and includes to local repo(config storage) before push
-    fs::copy(
-        dotty.config_d / dotty.activeProf(),
-        dotty.data_d / dotty.activeProf() / dotty.data_cfgref,
-        fs::copy_options::recursive | fs::copy_options::overwrite_existing
-    );
+    const std::string active = dotty.activeProf();
+    const fs::path cfg_src  = dotty.config_d / active;
+    const fs::path data_dst = dotty.data_d / active / dotty.data_cfgref;
+    const fs::path repo_d   = dotty.data_d / active;
 
-    core::CmdStream {}
-        .add("cd {}", (dotty.data_d/dotty.activeProf()).string())
+    if (!core::ensure_directories(cfg_src)) {
+        core::print("[Error] Could not ensure config directory: ", cfg_src.string(), "\n");
+        return EXIT_FAILURE;
+    }
+    if (!core::ensure_directories(data_dst)) {
+        core::print("[Error] Could not ensure data directory: ", data_dst.string(), "\n");
+        return EXIT_FAILURE;
+    }
+
+    // Copy profile config sources into the local repo before commit
+    std::error_code ec;
+    fs::copy(
+        cfg_src, data_dst,
+        fs::copy_options::recursive | fs::copy_options::overwrite_existing,
+        ec
+    );
+    if (ec) {
+        core::print("[Error] Failed to copy config into repo: ", ec.message(), "\n");
+        return EXIT_FAILURE;
+    }
+
+    int32 rc = core::CmdStream {}
+        .add("cd {}", core::shell_quote(repo_d.string()))
         .add("git add .")
-        .add("git commit -m \"{}\"", commit_message)
+        .add("git commit -m {}", core::shell_quote(commit_message ? commit_message : "update"))
         .add("git push")
     .run(true, false);
 
+    if (rc != 0) {
+        core::print("[Error] git push pipeline failed (exit ", rc, ")\n");
+        return EXIT_FAILURE;
+    }
+
+    core::print("Pushed profile '", active, "' successfully.\n");
     return EXIT_SUCCESS;
 }
 
 
 
 int32 CmdLine::do_pull() {
-    if (dotty.activeProf()==Profile::NOT || dotty.noProfilesExist()) {
-        core::print("Pull operation requires active profile to be set\n");
+    if (dotty.activeProf() == Profile::NOT || dotty.noProfilesExist()) {
+        core::print("Pull operation requires an active profile to be set\n");
         return EXIT_FAILURE;
     }
     if (!core::internet_is_connected()) {
-        core::print("Pull operation requires internet connection\n");
+        core::print("Pull operation requires an internet connection\n");
         return EXIT_FAILURE;
     }
 
-    if (!core::ask_confirm("You are about to overwrite your current profile, are you are sure?")) {
-        core::terminate("Pulling aborted.");
+    if (!core::ask_confirm("You are about to overwrite your current profile files. Continue?")) {
+        core::print("Pull aborted.\n");
+        return EXIT_FAILURE;
     }
 
     const Profile* const active_prof = dotty.getProfileByName(dotty.activeProf());
-    std::string active_config_d = (dotty.config_d/active_prof->name).string();
-    std::string active_data_d = (dotty.data_d/active_prof->name).string();
+    if (active_prof == nullptr) {
+        core::print("[Error] Active profile record is missing from master config\n");
+        return EXIT_FAILURE;
+    }
 
-    core::ensure_directories(dotty.config_d / dotty.activeProf() / dotty.data_cfgref);
-    core::ensure_directories(dotty.data_d / dotty.activeProf() / dotty.data_cfgref);
-    core::ensure_directories(dotty.HOME/".cache/dotty/");
-    core::CmdStream {}
-        .add("cd $HOME/.cache/dotty/")
-        .add("rm -rf ./{}", active_prof->name)
-        .add("git clone {} {}", active_prof->repo_url, active_prof->name)
-        .add("rm -rf {}/*", active_config_d)
+    const std::string active_config_d = (dotty.config_d / active_prof->name).string();
+    const std::string active_data_d   = (dotty.data_d / active_prof->name).string();
+    const fs::path cache_root = dotty.HOME / ".cache" / "dotty";
+    const fs::path cache_clone = cache_root / active_prof->name;
+
+    if (!core::ensure_directories(dotty.config_d / active_prof->name)) {
+        core::print("[Error] Could not create config directory\n");
+        return EXIT_FAILURE;
+    }
+    if (!core::ensure_directories(dotty.data_d / active_prof->name / dotty.data_cfgref)) {
+        core::print("[Error] Could not create data directory\n");
+        return EXIT_FAILURE;
+    }
+    if (!core::ensure_directories(cache_root)) {
+        core::print("[Error] Could not create cache directory: ", cache_root.string(), "\n");
+        return EXIT_FAILURE;
+    }
+
+    // Remove previous cache clone if any
+    core::remove_path(cache_clone);
+
+    int32 clone_rc = core::CmdStream {}
+        .add("cd {}", core::shell_quote(cache_root.string()))
+        .add("git clone {} {}",
+             core::shell_quote(active_prof->repo_url),
+             core::shell_quote(active_prof->name))
     .run(true, false);
 
-    // Copy cache-dir to data directory
-    core::copy_directory(
-        dotty.HOME / ".cache" / "dotty" / active_prof->name,
-        dotty.data_d
-    );
+    if (clone_rc != 0) {
+        core::print("[Error] git clone failed for '", active_prof->repo_url, "'\n");
+        return EXIT_FAILURE;
+    }
 
-    // Copy all storage config references back to dotty config directory
-    for (auto& item  : fs::directory_iterator(dotty.data_d/dotty.activeProf())) {
-        const std::string item_name = item.path().filename();
-        if (item.is_directory() && (item_name == dotty.data_cfgref)) {
-            core::copy_directory(item, active_config_d);
-            fs::remove_all(item);
+    // Replace local data dir with cloned content
+    core::remove_path(dotty.data_d / active_prof->name);
+    if (!core::copy_directory(cache_clone, dotty.data_d / active_prof->name)) {
+        // copy_directory copies contents into dest; ensure dest exists
+        if (!core::ensure_directories(dotty.data_d / active_prof->name) ||
+            !core::copy_directory(cache_clone, dotty.data_d / active_prof->name)) {
+            core::print("[Error] Failed to copy clone into data directory\n");
+            return EXIT_FAILURE;
         }
     }
-    dotty.repoToSystem();
-    core::copy_directory(active_config_d, fs::path(active_data_d)/dotty.data_cfgref);
 
+    // Restore config references from .dotty.d back into config directory
+    std::error_code ec;
+    fs::path data_prof = dotty.data_d / active_prof->name;
+    if (fs::exists(data_prof, ec)) {
+        for (auto& item : fs::directory_iterator(data_prof, ec)) {
+            if (ec) break;
+            if (item.is_directory(ec) && item.path().filename() == dotty.data_cfgref) {
+                // clear current config dir contents carefully
+                core::remove_path(fs::path(active_config_d));
+                core::ensure_directories(active_config_d);
+                if (!core::copy_directory(item.path(), fs::path(active_config_d))) {
+                    core::print("[Warning] Failed to restore config reference directory\n");
+                }
+                core::remove_path(item.path());
+            }
+        }
+    }
+
+    // Re-parse the restored config so mappings/exec are available for repoToSystem
+    {
+        const fs::path conf_path = dotty.config_d / active_prof->name / dotty.config_src;
+        std::ifstream conf(conf_path, std::ios::in);
+        if (conf.is_open()) {
+            DotlangLexer lexer;
+            DotlangParser parser;
+            parser.resetFileState();
+            std::vector<Token> all_tokens;
+            std::string line;
+            while (std::getline(conf, line)) {
+                lexer.feed(line);
+                lexer.lexMain().printComplains();
+                auto& toks = lexer.result();
+                all_tokens.insert(all_tokens.end(), toks.begin(), toks.end());
+            }
+            parser.feed(std::move(all_tokens));
+            parser.parseMain().printComplains();
+
+            dotty.files_to_copy      = std::move(parser.copy_files);
+            dotty.files_to_link      = std::move(parser.link_files);
+            dotty.dirs_to_copy       = std::move(parser.copy_dirs);
+            dotty.dirs_to_link       = std::move(parser.link_dirs);
+            dotty.sudo_files_to_copy = std::move(parser.sudo_copy_files);
+            dotty.sudo_files_to_link = std::move(parser.sudo_link_files);
+            dotty.sudo_dirs_to_copy  = std::move(parser.sudo_copy_dirs);
+            dotty.sudo_dirs_to_link  = std::move(parser.sudo_link_dirs);
+            dotty.exec_commands      = std::move(parser.exec_commands);
+        }
+    }
+
+    Report apply = dotty.repoToSystem();
+    apply.printOnBad();
+
+    Report exec_r = dotty.runExecCommands();
+    exec_r.printOnBad();
+
+    // Keep a config reference mirror inside data for future pushes
+    core::ensure_directories(fs::path(active_data_d) / dotty.data_cfgref);
+    core::copy_directory(fs::path(active_config_d), fs::path(active_data_d) / dotty.data_cfgref);
+
+    if (apply.error() || exec_r.error()) return EXIT_FAILURE;
+    core::print("Pulled and applied profile '", active_prof->name, "' successfully.\n");
     return EXIT_SUCCESS;
 }
 

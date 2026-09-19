@@ -166,7 +166,11 @@ int32 CmdLine::run()
     }
 
     std::string active_p = Profile::NOT;
-    dotty.load(true);
+    if (auto load_rep = dotty.load(true); load_rep.error()) {
+        // Non-fatal on first run (no master config yet) — print and continue
+        // so `dotty init` can still be invoked.
+        load_rep.printComplains();
+    }
     active_p = dotty.activeProf();
 
     if (APP.count_all() == 1) {

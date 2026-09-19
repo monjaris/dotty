@@ -175,42 +175,71 @@ inline bool prefix_strip(const std::string& str, const strview prefix, std::stri
 }
 
 
-// create a new file, return false if unsuccessful
+// create a new file, return false if unsuccessful or already exists
 inline bool new_file(const fs::path& path) {
-    if (fs::exists(path)) return false;
+    std::error_code ec;
+    if (fs::exists(path, ec) || ec) return false;
     std::ofstream file(path);
     return file.good();
 }
 
-// creates directory if doesnt exist, else no-op
-inline void ensure_directories(const fs::path& dir_path) {
-    fs::create_directories(dir_path);
+// creates directory if doesnt exist, else no-op. Returns false on failure.
+inline bool ensure_directories(const fs::path& dir_path) {
+    std::error_code ec;
+    if (fs::exists(dir_path, ec) && fs::is_directory(dir_path, ec)) return true;
+    fs::create_directories(dir_path, ec);
+    return !ec;
 }
 
-// copy while directory recursively without worrying about flags to pass
-inline void copy_directory(const fs::path& src_d, const fs::path& dest_d, bool cp_if_src_is_newer=false) {
+// copy whole directory recursively. Returns false on failure (never throws).
+inline bool copy_directory(const fs::path& src_d, const fs::path& dest_d, bool cp_if_src_is_newer=false) {
+    std::error_code ec;
     fs::copy(src_d, dest_d,
         fs::copy_options::recursive | (cp_if_src_is_newer?
-        fs::copy_options::update_existing : fs::copy_options::overwrite_existing
-    ));
+        fs::copy_options::update_existing : fs::copy_options::overwrite_existing),
+        ec
+    );
+    return !ec;
 }
 
 
 // parse file path by converting tilde('~') to $HOME variable
-constexpr inline fs::path parsePathTilde(std::string path) {
-    if (path.empty() || !(path[0] == '~')) return path;
+inline fs::path parsePathTilde(std::string path) {
+    if (path.empty() || path[0] != '~') return path;
     path.erase(0, 1);
     const char* const user_home = ::core::os::userHomePath();
+    if (user_home == nullptr || user_home[0] == '\0') return path;
     path.insert(0, user_home);
     return path;
 }
 
-inline bool is_file_empty(fs::path file_path) {
-    return fs::file_size(file_path) == 0uz;
+// true if missing or size==0; never throws
+inline bool is_file_empty(const fs::path& file_path) {
+    std::error_code ec;
+    if (!fs::exists(file_path, ec) || ec) return true;
+    auto sz = fs::file_size(file_path, ec);
+    if (ec) return true;
+    return sz == 0uz;
 }
 
-inline void empty_file(fs::path file_path) {
-    std::ofstream ef(file_path);
+// truncate / create empty file; returns false on failure
+inline bool empty_file(const fs::path& file_path) {
+    std::ofstream ef(file_path, std::ios::trunc);
+    return ef.good();
+}
+
+// safe remove_all wrapper
+inline bool remove_path(const fs::path& path) {
+    std::error_code ec;
+    fs::remove_all(path, ec);
+    return !ec;
+}
+
+// safe copy_file wrapper
+inline bool copy_file_safe(const fs::path& src, const fs::path& dest, fs::copy_options opts = fs::copy_options::overwrite_existing) {
+    std::error_code ec;
+    fs::copy_file(src, dest, opts, ec);
+    return !ec;
 }
 
 // remove all files/subfolders inside a directory but not itself

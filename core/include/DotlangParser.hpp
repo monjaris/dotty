@@ -2,21 +2,36 @@
 #include "DotlangLexer.hpp"
 
 /*
- * This file contains Parser for dotlang
- * dotlang is DSL for dotty project to optimize scripting for dotty's purposes
+ * Parser for dotlang — DSL for dotty config mappings and actions.
  *
  * Language specification:
- * comment lines start with '#' character
- * multi-line comment doesn't exist yet and i wont implement it as long as users doesnt want it
+ *   comment lines start with '#' (except "#!" directives)
+ *   multi-line comments are not supported
  *
- * Small notes put for clarity:
- * Both '-' and '_' are counted as identifier elements, therefore, `allow-sudo` is an identifier.
- * But _dummy1 or -dummy2 are not identifiers, they start with non-alpha character
- * Also, foo.bar.smt is an identifier too, but it's flat and just visualizes member access
+ * Directives (file-scoped enable switches):
+ *   #!allow-sudo
+ *   #!allow-exec
+ *   #!allow-sudo,allow-exec
+ *
+ * Actions (require matching directive to be enabled):
+ *   @sudo  "<src>" >>  "<dest>"     # privileged copy file
+ *   @sudo  "<src>" ->  "<dest>"     # privileged link file
+ *   @sudo  "<src>" >>* "<dest>"     # privileged copy dir
+ *   @sudo  "<src>" ->* "<dest>"     # privileged link dir
+ *   @exec  'command args...'        # posix_spawn command (single quotes)
+ *
+ * Plain mappings (no action prefix):
+ *   "<src>" >>  "<dest>"
+ *   "<src>" ->  "<dest>"
+ *   "<src>" >>* "<dest>"
+ *   "<src>" ->* "<dest>"
+ *
+ * Notes:
+ *   Both '-' and '_' count as identifier characters.
+ *   Identifiers must start with an alpha character.
  */
 
 
-// anonymus namespace, private to other files
 NAMESPACE_START()
 
 class Action {
@@ -41,7 +56,6 @@ public:
         m_enabled = false;
     }
 
-    // for comparison trait
     bool operator== (const Action& other) const {
         return !strcmp(command, other.command);
     }
@@ -63,20 +77,23 @@ private:
 
     struct Opts {
         Action sudo {"allow-sudo", "sudo"};
+        Action exec {"allow-exec", "exec"};
     } opts;
 
 public:
     std::vector<Token> tokens;
-    // these four are for storing copy/link action paths
+    // regular path ops
     std::vector<SrcDest> copy_files;
     std::vector<SrcDest> copy_dirs;
     std::vector<SrcDest> link_files;
     std::vector<SrcDest> link_dirs;
-    // these four are previleged versions of above four
+    // privileged path ops
     std::vector<SrcDest> sudo_copy_files;
     std::vector<SrcDest> sudo_copy_dirs;
     std::vector<SrcDest> sudo_link_files;
     std::vector<SrcDest> sudo_link_dirs;
+    // @exec command lines (single-quoted payload, no shell)
+    std::vector<std::string> exec_commands;
 
 private:
     Token m_get();
@@ -86,12 +103,16 @@ private:
     ParseReport m_parseAction();
     ParseReport m_parsePathOperation(inilist<Action> options);
     ParseReport m_parseDirectives();
+    ParseReport m_parseExecAction();
 
 public:
     static void ResolvePaths(std::string* src, std::string* dest);
 
     void feed(std::vector<Token>&& tokens);
     void feed(const std::vector<Token>& tokens);
+
+    // Reset enable flags and clear result vectors (call once per config file).
+    void resetFileState();
 
     ParseReport parseMain();
 };

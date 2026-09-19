@@ -163,7 +163,8 @@ void test_sudo_directive_alone_does_not_imply_action() {
 
 
 void test_sudo_state_resets_between_parseMain_calls() {
-    // regression test for the opts::sudo-not-resetting bug
+    // enable flags persist across parseMain unless resetFileState() is called.
+    // Vectors also accumulate unless cleared. resetFileState() clears both.
     DotlangParser p;
 
     auto tokens1 = lex_line("#! allow-sudo");
@@ -173,16 +174,57 @@ void test_sudo_state_resets_between_parseMain_calls() {
     p.parseMain();
     CHECK(p.sudo_copy_files.size() == 1, "reset check: first parseMain populates sudo_copy_files");
 
-    // second parseMain call, no @sudo this time -- must NOT leak sudo state
+    // Without reset, enable flag still on — but plain mapping is not sudo
     auto tokens2 = lex_line("\"/etc/vimrc\" >> \"vimrc\"");
     p.feed((tokens2));
     p.parseMain();
+    CHECK(p.copy_files.size() == 1, "reset check: non-sudo copy lands in copy_files");
+    CHECK(p.sudo_copy_files.size() == 1, "reset check: sudo_copy_files unchanged by plain mapping");
 
-    CHECK(p.copy_files.size() == 1, "reset check: second call's non-sudo copy lands in copy_files");
-    // sudo_copy_files still has size 1 from the FIRST call since vectors aren't cleared
-    // between parseMain() calls by design (see do_update's accumulation pattern) --
-    // this checks no additional entry was incorrectly added as sudo.
-    CHECK(p.sudo_copy_files.size() == 1, "reset check: sudo_copy_files unchanged by second (non-sudo) call");
+    // Explicit reset clears vectors and disables actions
+    p.resetFileState();
+    CHECK(p.sudo_copy_files.empty(), "resetFileState clears sudo_copy_files");
+    CHECK(p.copy_files.empty(), "resetFileState clears copy_files");
+
+    auto tokens3 = lex_line("@sudo \"/etc/hosts\" >> \"hosts\"");
+    p.feed(tokens3);
+    auto report = p.parseMain();
+    CHECK(report.error(), "after reset, @sudo without directive is rejected");
+    CHECK(p.sudo_copy_files.empty(), "after reset, no sudo entry recorded");
+}
+
+void test_exec_action() {
+    auto tokens = lex_line("#! allow-exec");
+    auto exec_tokens = lex_line("@exec \'yay -S brave\'");
+    tokens.insert(tokens.end(), exec_tokens.begin(), exec_tokens.end());
+
+    DotlangParser p;
+    p.feed(tokens);
+    auto report = p.parseMain();
+    CHECK(!report.error() || p.exec_commands.size() == 1, "exec: parse succeeds or records command");
+    CHECK(p.exec_commands.size() == 1, "exec: one command recorded");
+    if (!p.exec_commands.empty()) {
+        CHECK(p.exec_commands[0] == "yay -S brave", "exec: command payload preserved");
+    }
+}
+
+void test_exec_without_directive_is_rejected() {
+    auto tokens = lex_line("@exec \'echo hello\'");
+    DotlangParser p;
+    p.feed(tokens);
+    auto report = p.parseMain();
+    CHECK(report.error(), "exec w/o directive: report flags error");
+    CHECK(p.exec_commands.empty(), "exec w/o directive: no command recorded");
+}
+
+void test_single_quoted_string_lexes() {
+    auto tokens = lex_line("@exec \'printf hi\'");
+    CHECK(!tokens.empty(), "single-quote lex: produces tokens");
+    bool has_string = false;
+    for (auto& t : tokens) {
+        if (t.type == Token::STRING && t.name == "printf hi") has_string = true;
+    }
+    CHECK(has_string, "single-quote lex: STRING token carries payload");
 }
 
 
@@ -225,6 +267,9 @@ int main() {
     test_unknown_directive_reports_complain();
     test_unterminated_string_is_rejected();
     test_tabs_are_consumed_as_whitespace();
+    test_exec_action();
+    test_exec_without_directive_is_rejected();
+    test_single_quoted_string_lexes();
 
     if (failures) {
         std::cerr << "\n" << failures << " test(s) failed.\n";

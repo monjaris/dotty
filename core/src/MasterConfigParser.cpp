@@ -35,11 +35,17 @@ Report MCP::rEval()
 {
     Report rep;
 
-    vars[P_ACTIVE_PROF] = m_toml->table[P_ACTIVE_PROF].value_or(Profile::NOT);
-    vars[P_CFG_EDITOR]  = m_toml->table[P_CFG_EDITOR].value_or(core::os::get_txt_editor());
+    vars[P_ACTIVE_PROF] = m_toml->table[P_ACTIVE_PROF].value_or(std::string{Profile::NOT});
+    // Never pass a possibly-null const char* into value_or → std::string (UB/segfault).
+    vars[P_CFG_EDITOR]  = m_toml->table[P_CFG_EDITOR].value_or(
+        std::string{core::os::get_txt_editor()}
+    );
 
     auto* arr_profiles = m_toml->table[P_PROFILES].as_array();
-    if (!arr_profiles) return rep.Bad("No profiles configuired!");
+    // Empty or missing profiles array is valid after a fresh `dotty init`.
+    if (!arr_profiles) {
+        return Report::Good();
+    }
 
     for (auto& node_profile  : *arr_profiles) {
         toml::table* tbl_profile = node_profile.as_table();

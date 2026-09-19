@@ -9,9 +9,10 @@ public:
 
     std::vector<Profile> m_profiles;
 
-    const fs::path HOME = core::os::userHomePath();  // this throws exception on fail, nice thing
-    fs::path config_d = HOME/core::os::get_config_d()/"dotty";
-    fs::path data_d = HOME/".local/share/dotty";
+    // Resolved at construction; empty HOME is tolerated and reported later.
+    const fs::path HOME;
+    fs::path config_d;
+    fs::path data_d;
 
     const char* const master_src = ".dotty.toml";
     const char* const config_src = "config";
@@ -26,6 +27,7 @@ public:
     std::vector<SrcDest> sudo_files_to_link = {};
     std::vector<SrcDest> sudo_dirs_to_copy = {};
     std::vector<SrcDest> sudo_dirs_to_link = {};
+    std::vector<std::string> exec_commands = {};
 
     enum class Res : uint8_t {
         OK=0,
@@ -38,6 +40,7 @@ public:
         ProfileAlreadySet=7,
     };
 
+    ConfigManager();
 
     Report validateProfileName(const std::string& name);
     Report validateRepoName(const std::string& repo);
@@ -55,9 +58,14 @@ public:
     Report cleanConfigs(bool config, bool storage);
     bool detectPreinitConfig();
     Report reloadConfig();
-    void load(bool first_load);
-    std::array<std::vector<SrcDest>, 8> systemToRepo();
-    void repoToSystem();
+    // Returns Report; never throws. first_load creates missing skeleton files.
+    Report load(bool first_load);
+    // Apply system → repo mappings. Returns Report (never throws).
+    Report systemToRepo();
+    // Apply repo → system mappings. Returns Report (never throws).
+    Report repoToSystem();
+    // Run collected @exec commands via posix_spawn (no shell).
+    Report runExecCommands();
 };
 
 extern ConfigManager dotty;

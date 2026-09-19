@@ -16,3 +16,4 @@ build/
 /dotty
 /generate-makefile.sh
 /TODO.md
+compile_commands.json

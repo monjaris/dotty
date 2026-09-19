@@ -1,5 +1,6 @@
 #include "ConfigManager.hpp"
 #include "CmdStream.hpp"
+#include <algorithm>
 
 using CM = ConfigManager;
 
@@ -101,96 +102,142 @@ Report CM::newProfile(
 ){
     static COMPTIME_STR err = "Can't create profile";
 
-    // validate profile and repo names quickly
-    dotty.validateProfileName(name).printOnBad().terminateOnBad();
-    dotty.validateRepoName(repo_name).printOnBad().terminateOnBad();
+    if (auto v = validateProfileName(name); v.error()) return v;
+    if (auto v = validateRepoName(repo_name); v.error()) return v;
     if (profileExists(name)) return Report::Bad("{} '{}': Profile already exists.", err, name);
-    // create profile directory and files
-    if (!fs::create_directories(config_d/name)) {
+
+    if (HOME.empty()) {
+        return Report::Bad("{}: HOME is not set", err);
+    }
+
+    std::error_code ec;
+    fs::create_directories(config_d / name, ec);
+    if (ec) {
         return Report::Bad(
-            "Couldn't create directories, they probably already exist: '{}'",
-            (config_d/name).string()
+            "Couldn't create config directory '{}': {}",
+            (config_d / name).string(), ec.message()
         );
     }
-    if (!core::new_file(config_d/name/config_src)) return Report::Bad("Coudln't create configuration file!");
 
-    if (!fs::exists(HOME/master_src) && core::new_file(HOME/master_src)) {
-        core::debug("Created unexistent master config file!");
+    const fs::path cfg_file = config_d / name / config_src;
+    if (!fs::exists(cfg_file, ec)) {
+        if (!core::new_file(cfg_file)) {
+            return Report::Bad("Couldn't create configuration file '{}'", cfg_file.string());
+        }
     }
-    core::debug("Created new config file in: ", (config_d/name/"config").string());
 
-    // constants
-    const fs::path repo_d = core::parsePathTilde(data_d/name);
-    const fs::path config = core::parsePathTilde(config_d/name);
+    const fs::path master_path = HOME / master_src;
+    if (!fs::exists(master_path, ec) || core::is_file_empty(master_path)) {
+        std::ofstream fo(master_path, std::ios::out | std::ios::trunc);
+        if (!fo) return Report::Bad("Couldn't create master config '{}'", master_path.string());
+        fo << "active-profile = \"[NIL-PROFILE]\"\n"
+           << "config-editor = \"\"\n"
+           << "profile = []\n";
+        if (!fo) return Report::Bad("Couldn't write master config '{}'", master_path.string());
+    }
 
-    // create data(also repository) directory and a config-reference
-    core::ensure_directories(repo_d/data_cfgref);
-    // create and push github repo
-    core::CmdStream {}
+    const fs::path repo_d = data_d / name;
+    if (!core::ensure_directories(repo_d / data_cfgref)) {
+        return Report::Bad("Couldn't create data directory '{}'", (repo_d / data_cfgref).string());
+    }
+
+    if (!core::os::in_path("git")) {
+        return Report::Bad("{}: 'git' is not installed", err);
+    }
+    if (!core::os::in_path("gh")) {
+        return Report::Bad("{}: 'gh' (GitHub CLI) is not installed", err);
+    }
+
+    const char* commit = (initial_commit_message && initial_commit_message[0])
+        ? initial_commit_message
+        : "Initial commit of this configuration profile";
+
+    int32 git_rc = core::CmdStream {}
         .add("cd {}", core::shell_quote(repo_d.string()))
         .add("git init")
         .add("touch .gitkeep")
         .add("git add .gitkeep")
-        .add("git commit -m {}", core::shell_quote(initial_commit_message))
+        .add("git commit -m {}", core::shell_quote(commit))
         .add("gh repo create {} --{} --source={} --remote=origin --push",
-            core::shell_quote(repo_name), is_public?"public":"private", core::shell_quote(repo_d.string()))
+            core::shell_quote(repo_name), is_public ? "public" : "private",
+            core::shell_quote(repo_d.string()))
     .run(true, false);
 
-    core::debug("Writing new profile configurations to master config");
-    MasterConfigParser master_cfman;
-    if (auto rep_parse = master_cfman.rParse(HOME/master_src)) {
-        rep_parse.printOnBad().terminateOnBad();
-    } else {
-        if (auto rep_eval = master_cfman.rEval()) {
-            rep_eval.printComplains();
-        }
+    if (git_rc != 0) {
+        return Report::Bad(
+            "{} '{}': git/gh pipeline failed (exit {}). "
+            "Local directories were created; fix the remote and retry, or delete the profile.",
+            err, name, git_rc
+        );
     }
 
-    // add profile to config
-    master_cfman.wAddProfile(Profile{
+    MasterConfigParser master_cfman;
+    if (auto rep_parse = master_cfman.rParse(master_path); rep_parse.error()) {
+        return Report::Bad("{}: failed to parse master config: {}", err, rep_parse.m_msg);
+    }
+    master_cfman.rEval().printComplains();
+
+    if (auto add = master_cfman.wAddProfile(Profile{
         name, core::make_repo_url(github_name, repo_name), is_public, is_external
-    }).printOnBad();
+    }); add.error()) {
+        return add;
+    }
 
-    // activate new profile and save configuration
-    master_cfman.wActivateProfile(name).printOnBad();
-    master_cfman.wSaveConfig(HOME/master_src).printOnBad();
+    if (auto act = master_cfman.wActivateProfile(name); act.error()) {
+        return act;
+    }
+    if (auto save = master_cfman.wSaveConfig(master_path); save.error()) {
+        return save;
+    }
 
-    reloadConfig().printComplains();
+    if (auto rel = reloadConfig(); rel.error()) {
+        rel.printComplains();
+    }
     return Report::Good();
 }
 
 
 
 Report CM::deleteProfile(const strview profile_name) {
-    if (!profileExists(profile_name)) {
-        return Report::Bad("Can't delete '{}', it doesn't exist!", profile_name);
+    const std::string name{profile_name};
+
+    if (auto v = validateProfileName(name); v.error()) {
+        return v;
     }
-    auto rep = validateProfileName(profile_name.data());
-    if (rep.error()) {
-        rep.printComplains();
-        return Report::Bad("Couldn't delete profile!");
+    if (!profileExists(name)) {
+        return Report::Bad("Can't delete '{}', it doesn't exist!", name);
     }
 
-    bool is_active = activeProf() == getProfileByName(profile_name)->name;
+    const bool was_active = (activeProf() == name);
 
     MasterConfigParser master_cfman;
-    master_cfman.rParse(HOME/master_src).printOnBad();
-    master_cfman.rEval().printComplains();
-
-    if (is_active) {
-        master_cfman.wActivateProfile(Profile::NOT)
-            .printOnBad().terminateOnBad();
+    const fs::path master_path = HOME / master_src;
+    if (auto rp = master_cfman.rParse(master_path); rp.error()) {
+        return Report::Bad("Can't delete '{}': failed to parse master config", name);
     }
-    auto report = master_cfman.wRemoveProfile(profile_name);
 
-    if (report.success()) {
-        master_cfman
-            .wSaveConfig(HOME/master_src)
-            .printOnBad()
-            .terminateOnBad();
-    } else {  // failed wRemoveProfile
-        report.printOnBad();
-        return report.Bad("Couldn't delete profile!");
+    if (was_active) {
+        if (auto act = master_cfman.wActivateProfile(Profile::NOT); act.error()) {
+            return act;
+        }
+    }
+
+    if (auto rem = master_cfman.wRemoveProfile(name); rem.error()) {
+        return rem;
+    }
+
+    if (auto save = master_cfman.wSaveConfig(master_path); save.error()) {
+        return save;
+    }
+
+    // Keep in-memory state in sync so later commands in this process see the deletion.
+    m_profiles.erase(
+        std::remove_if(m_profiles.begin(), m_profiles.end(),
+            [&](const Profile& p) { return p.name == name; }),
+        m_profiles.end()
+    );
+    if (was_active) {
+        m_current_profile = Profile{};
     }
 
     return Report::Good();
@@ -201,35 +248,41 @@ Report CM::deleteProfile(const strview profile_name) {
 // Set current dotty profile
 Report CM::setActiveProfile(const strview name) {
     Report report;
-    MasterConfigParser master_cfman;
 
-    if (noProfilesExist()) {
-        return report.Bad("Can't set active profile: No profiles exist yet!");
+    if (noProfilesExist() && name != Profile::NOT) {
+        return Report::Bad("Can't set active profile: No profiles exist yet!");
     }
-    else if (name!=Profile::NOT && !profileExists(name)) {
-        return report.Bad("Can't switch to '{}': Profile doesn't exist!", name);
+    else if (name != Profile::NOT && !profileExists(name)) {
+        return Report::Bad("Can't switch to '{}': Profile doesn't exist!", name);
     }
     else if (m_current_profile.name == name) {
-        report.addComplain("profile '{}' is already active", name);
-        return report.Good();
+        return Report::Good();
     }
 
-    master_cfman.rParse(HOME/master_src).printComplains();
+    MasterConfigParser master_cfman;
+    const fs::path master_path = HOME / master_src;
+    if (auto rp = master_cfman.rParse(master_path); rp.error()) {
+        return Report::Bad("Can't switch profile: failed to parse master config");
+    }
     master_cfman.rEval().printComplains();
-    if (auto report = master_cfman.wActivateProfile(name)) {
-        report.printOnBad();
-    };
-    master_cfman.wSaveConfig(HOME/master_src).printOnBad();
-    // will terminate on problems such as same named profiles
-    master_cfman.rValidateConfig().printOnBad().terminateOnBad();
-    reloadConfig().mute();
+
+    if (auto act = master_cfman.wActivateProfile(name); act.error()) {
+        return act;
+    }
+    if (auto save = master_cfman.wSaveConfig(master_path); save.error()) {
+        return save;
+    }
+
+    if (name == Profile::NOT) {
+        m_current_profile = Profile{};
+        return Report::Good();
+    }
 
     if (auto* found_prof = getProfileByName(name)) {
         m_current_profile = *found_prof;
-    } else {  // p_prof = nullptr
-        return report.Bad("Couldn't find profile '{}'", name);
+        return Report::Good();
     }
-    return report.Good();
+    return Report::Bad("Couldn't find profile '{}'", name);
 }
 
 
@@ -318,10 +371,10 @@ Report CM::listProfiles(bool name, bool repo, bool url, bool gh) {
 
 
 bool CM::detectPreinitConfig() {
-    std::ifstream master(HOME/master_src, std::ios::in);
-    if (!master) return false;  // doesn't even exist
-    else if (fs::is_empty(HOME/master_src)) return false;
-    return true;
+    std::error_code ec;
+    const fs::path master_path = HOME / master_src;
+    if (!fs::exists(master_path, ec) || ec) return false;
+    return !core::is_file_empty(master_path);
 }
 
 

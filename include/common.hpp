@@ -11,7 +11,9 @@
 #include <map>
 #include <string_view>
 #include <functional>
-#include <expected>
+#include <optional>
+#include <algorithm>
+#include <iterator>
 #include <fstream>
 #include <sstream>
 // legacy

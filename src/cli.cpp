@@ -88,7 +88,7 @@ int32 CmdLine::setup()
         BIND(do_push(impl->v.push_commit_msg.c_str())),
         "Push config storage to the github repo", false, {0,0}, {0,0}
     ); sc_push
-        ->add_option("--commit-message", impl->v.push_commit_msg, "Push with commit message")->required()
+        ->add_option("--commit-message,-m", impl->v.push_commit_msg, "Push with commit message")
     ;
     //
     SubCmd* sc_pull = newSubCmd(&APP, {"pull"},
@@ -98,7 +98,7 @@ int32 CmdLine::setup()
     //
     SubCmd* sc_config = newSubCmd(&APP, {"config", "c"},
         BIND(do_config(impl->v.config_what, impl->v.config_editor)),
-        "Configuration utilities",false, {0,0}, {0,0}
+        "Configuration utilities", true, {0,0}, {0,0}
     );
         sc_config->add_option("configuration", impl->v.config_what, "Which configuration to view/edit");
         sc_config->add_option("-e,--editor", impl->v.config_editor, "Configuire with chosen editor");

@@ -50,6 +50,15 @@ int32 CmdLine::do_init() {
             core::print("[Error] Could not reset master config: ", master.string(), "\n");
             return EXIT_FAILURE;
         }
+        std::ofstream fo(master, std::ios::out | std::ios::trunc);
+        if (!fo) {
+            core::print("[Error] Could not rewrite master config: ", master.string(), "\n");
+            return EXIT_FAILURE;
+        }
+        fo << "# dotty master configuration\n"
+           << "active-profile = \"[NIL-PROFILE]\"\n"
+           << "config-editor = \"\"\n"
+           << "profile = []\n";
         core::print("Reset '", master.string(), "'\n");
     } else {
         // Write a minimal valid master skeleton so later parse does not fail.
@@ -184,26 +193,37 @@ int32 CmdLine::do_push(const char* commit_message) {
     }
 
     // Copy profile config sources into the local repo before commit
-    std::error_code ec;
-    fs::copy(
-        cfg_src, data_dst,
-        fs::copy_options::recursive | fs::copy_options::overwrite_existing,
-        ec
-    );
-    if (ec) {
-        core::print("[Error] Failed to copy config into repo: ", ec.message(), "\n");
+    if (!core::copy_directory_contents(cfg_src, data_dst)) {
+        core::print("[Error] Failed to copy config into repo\n");
         return EXIT_FAILURE;
+    }
+
+    int32 add_rc = core::CmdStream {}
+        .add("cd {}", core::shell_quote(repo_d.string()))
+        .add("git add .")
+    .run(true, false);
+    if (add_rc != 0) {
+        core::print("[Error] git add failed (exit ", add_rc, ")\n");
+        return EXIT_FAILURE;
+    }
+
+    // Empty commits are not an error — still push whatever is on the branch.
+    const char* msg = (commit_message && commit_message[0]) ? commit_message : "dotty update";
+    int32 commit_rc = core::CmdStream {}
+        .add("cd {}", core::shell_quote(repo_d.string()))
+        .add("git commit -m {}", core::shell_quote(msg))
+    .run(true, false);
+    if (commit_rc != 0) {
+        core::print("Nothing new to commit (or commit failed); continuing with push.\n");
     }
 
     int32 rc = core::CmdStream {}
         .add("cd {}", core::shell_quote(repo_d.string()))
-        .add("git add .")
-        .add("git commit -m {}", core::shell_quote(commit_message ? commit_message : "update"))
         .add("git push")
     .run(true, false);
 
     if (rc != 0) {
-        core::print("[Error] git push pipeline failed (exit ", rc, ")\n");
+        core::print("[Error] git push failed (exit ", rc, ")\n");
         return EXIT_FAILURE;
     }
 
@@ -269,31 +289,21 @@ int32 CmdLine::do_pull() {
 
     // Replace local data dir with cloned content
     core::remove_path(dotty.data_d / active_prof->name);
-    if (!core::copy_directory(cache_clone, dotty.data_d / active_prof->name)) {
-        // copy_directory copies contents into dest; ensure dest exists
-        if (!core::ensure_directories(dotty.data_d / active_prof->name) ||
-            !core::copy_directory(cache_clone, dotty.data_d / active_prof->name)) {
-            core::print("[Error] Failed to copy clone into data directory\n");
-            return EXIT_FAILURE;
-        }
+    if (!core::ensure_directories(dotty.data_d / active_prof->name) ||
+        !core::copy_directory_contents(cache_clone, dotty.data_d / active_prof->name)) {
+        core::print("[Error] Failed to copy clone into data directory\n");
+        return EXIT_FAILURE;
     }
 
-    // Restore config references from .dotty.d back into config directory
+    // Restore config references from .dotty.d back to the config directory
     std::error_code ec;
-    fs::path data_prof = dotty.data_d / active_prof->name;
-    if (fs::exists(data_prof, ec)) {
-        for (auto& item : fs::directory_iterator(data_prof, ec)) {
-            if (ec) break;
-            if (item.is_directory(ec) && item.path().filename() == dotty.data_cfgref) {
-                // clear current config dir contents carefully
-                core::remove_path(fs::path(active_config_d));
-                core::ensure_directories(active_config_d);
-                if (!core::copy_directory(item.path(), fs::path(active_config_d))) {
-                    core::print("[Warning] Failed to restore config reference directory\n");
-                }
-                core::remove_path(item.path());
-            }
+    const fs::path cfgref = dotty.data_d / active_prof->name / dotty.data_cfgref;
+    if (fs::exists(cfgref, ec) && fs::is_directory(cfgref, ec)) {
+        core::ensure_directories(active_config_d);
+        if (!core::copy_directory_contents(cfgref, fs::path(active_config_d))) {
+            core::print("[Warning] Failed to restore config reference directory\n");
         }
+        core::remove_path(cfgref);
     }
 
     // Re-parse the restored config so mappings/exec are available for repoToSystem
@@ -335,7 +345,7 @@ int32 CmdLine::do_pull() {
 
     // Keep a config reference mirror inside data for future pushes
     core::ensure_directories(fs::path(active_data_d) / dotty.data_cfgref);
-    core::copy_directory(fs::path(active_config_d), fs::path(active_data_d) / dotty.data_cfgref);
+    core::copy_directory_contents(fs::path(active_config_d), fs::path(active_data_d) / dotty.data_cfgref);
 
     if (apply.error() || exec_r.error()) return EXIT_FAILURE;
     core::print("Pulled and applied profile '", active_prof->name, "' successfully.\n");
@@ -361,6 +371,13 @@ int32 CmdLine::do_config(strview what_cfg, const strview editor_name) {
                 mcp.rParse(dotty.HOME/dotty.master_src).printComplains();
                 mcp.rEval().printComplains();
                 editor = mcp.vars[mcp.P_CFG_EDITOR];
+            }
+            if (editor.empty()) {
+                editor = core::os::get_txt_editor();
+            }
+            if (editor.empty()) {
+                core::print("[Error] No editor found. Set EDITOR or pass -e.\n");
+                return EXIT_FAILURE;
             }
             return core::CmdStream {}
                 .add("{} {}", editor, cfg_path.string())
@@ -449,13 +466,21 @@ int32 CmdLine::do_p_new(
     bool pub, const std::string& commit_msg
 ){
     std::optional<std::string> gh_acc = core::active_github_account();
-    if (!gh_acc.has_value()) core::terminate("Github login not found");
+    if (!gh_acc.has_value()) {
+        core::print("[Error] GitHub login not found. Run 'gh auth login' first.\n");
+        return EXIT_FAILURE;
+    }
 
-    dotty.newProfile(
+    Report r = dotty.newProfile(
         name, gh_acc.value(), repo_name, pub,
-        false, commit_msg.data()
-    ).printOnBad().terminateOnBad();
+        false, commit_msg.c_str()
+    );
+    if (r.error()) {
+        r.printOnBad();
+        return EXIT_FAILURE;
+    }
 
+    core::print("Created profile '", name, "' and set it active.\n");
     return EXIT_SUCCESS;
 }
 
@@ -466,7 +491,8 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
         core::print("Can't delete a profile: no profiles exist yet!\n");
         return EXIT_FAILURE;
     }
-    if (dotty.getProfileByName(profile_name) == nullptr) {
+    const Profile* prof = dotty.getProfileByName(profile_name);
+    if (prof == nullptr) {
         core::print(
             "Could not delete '", profile_name,
             "': profile does not exist!\n"
@@ -474,35 +500,61 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
         return EXIT_FAILURE;
     }
 
-    // delete github repo
-    int32 repo_deletion_failed =  core::CmdStream{}
-        .add("gh repo delete {}", core::repo_from_url(dotty.getProfileByName(profile_name)->repo_url))
-    .run(false, false, false);
+    const std::string repo_url = prof->repo_url;
+    const std::string owner_repo = core::owner_repo_from_url(repo_url);
+    const bool was_active = (dotty.activeProf() == profile_name);
 
-    if (repo_deletion_failed) {
-        core::print("Couldn't delete github repo!\n");
-        if (!core::ask_confirm("Do you want to proceed with removing directories of it anyway?")) {
-            core::terminate("Could not remove '", profile_name, "'!");
+    if (!core::ask_confirm(
+        std::format(
+            "Delete profile '{}'?\n"
+            "  This removes local config/data and (if possible) GitHub repo '{}'.",
+            profile_name, owner_repo
+        ),
+        false
+    )) {
+        core::print("Delete aborted.\n");
+        return EXIT_FAILURE;
+    }
+
+    // 1. Update master config FIRST so a crash later does not leave a ghost profile
+    //    whose directories are already gone.
+    Report del = dotty.deleteProfile(profile_name);
+    if (del.error()) {
+        del.printOnBad();
+        return EXIT_FAILURE;
+    }
+
+    // 2. Remove local directories
+    core::print("Deleting profile files and directories...\n");
+    std::error_code fs_err;
+    fs::remove_all(dotty.config_d / profile_name, fs_err);
+    if (fs_err) {
+        core::print("[Warning] Could not fully remove config dir: ", fs_err.message(), "\n");
+    }
+    fs_err.clear();
+    fs::remove_all(dotty.data_d / profile_name, fs_err);
+    if (fs_err) {
+        core::print("[Warning] Could not fully remove data dir: ", fs_err.message(), "\n");
+    }
+
+    // 3. Delete GitHub repo (non-fatal if it fails)
+    if (owner_repo != "[BAD-URL]" && core::os::in_path("gh") && core::internet_is_connected()) {
+        int32 repo_deletion_failed = core::CmdStream{}
+            .add("gh repo delete {} --yes", core::shell_quote(owner_repo))
+        .run(false, false, true);
+
+        if (repo_deletion_failed) {
+            core::print(
+                "[Warning] Couldn't delete GitHub repo '", owner_repo,
+                "'. Local profile was still removed.\n"
+            );
         }
     }
 
-
-    core::print("Deleting profile files and directories!...\n");
-
-    std::error_code fs_err = {};
-    //
-    fs::remove_all(dotty.config_d/profile_name, fs_err);
-    if (fs_err) {
-         core::print("[ERROR]: No profile config removed!\n");
+    if (was_active) {
+        core::print("Active profile was deleted. Switch to another with: dotty profile switch <name>\n");
     }
-    //
-    fs::remove_all(dotty.data_d/profile_name, fs_err);
-    if (fs_err) {
-        core::print("[ERROR]: No profile storage data removed!\n");
-    }
-
-    dotty.deleteProfile(profile_name).printOnBad();
-
+    core::print("Deleted profile '", profile_name, "'.\n");
     return EXIT_SUCCESS;
 }
 
@@ -510,9 +562,10 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
 
 int32 CmdLine::do_p_switch(const std::string& profile_name) {
     Report fault = dotty.setActiveProfile(profile_name);
-    if (fault) {
+    if (fault.error()) {
         fault.printOnBad();
         return EXIT_FAILURE;
     }
+    core::print("Active profile: ", profile_name, "\n");
     return EXIT_SUCCESS;
 }

@@ -34,9 +34,9 @@ Report MCP::rParse(const fs::path& path)
 Report MCP::rEval()
 {
     Report rep;
+    profiles.clear();
 
     vars[P_ACTIVE_PROF] = m_toml->table[P_ACTIVE_PROF].value_or(std::string{Profile::NOT});
-    // Never pass a possibly-null const char* into value_or → std::string (UB/segfault).
     vars[P_CFG_EDITOR]  = m_toml->table[P_CFG_EDITOR].value_or(
         std::string{core::os::get_txt_editor()}
     );
@@ -55,18 +55,17 @@ Report MCP::rEval()
         }
         toml::table& prof = *tbl_profile;
 
-        std::string name = prof[PP_NAME].value_or(Profile::NOT);
-        std::string url  = prof[PP_REPO_URL].value_or("");
-        tern is_public   = prof[PP_REPO_PUB].value_or(tern::neutr);
+        std::string name = prof[PP_NAME].value_or(std::string{Profile::NOT});
+        std::string url  = prof[PP_REPO_URL].value_or(std::string{});
+        // Default missing `public` to false rather than skipping the whole profile.
+        bool is_public   = prof[PP_REPO_PUB].value_or(false);
         bool is_extern   = prof[PP_EXTERNAL].value_or(false);
 
-        // `is_public.boolable()` checks for if `is_public` is not `neutr`
-        if (name==Profile::NOT || url.empty() || !is_public.boolable()) {
+        if (name.empty() || name == Profile::NOT || url.empty()) {
             rep.addComplain("Profile have missing properties, skipping..");
             continue;
         }
-        // is_public is already .boolable() if this code runs
-        profiles.push_back(Profile{name, url, (bool)is_public, is_extern});
+        profiles.push_back(Profile{name, url, is_public, is_extern});
     }
 
     return rep;
@@ -88,18 +87,15 @@ Report MCP::rValidateConfig() {
 
 
 Report MCP::wActivateProfile(const strview name) {
-    Report rep;
-    auto pair = m_toml->table.insert_or_assign(P_ACTIVE_PROF, name);
-    if (pair.second == false) rep.addComplain("Active profile was already set.");
-    return rep;
+    // Updating an existing active-profile key is the normal path, not an error.
+    m_toml->table.insert_or_assign(P_ACTIVE_PROF, std::string{name});
+    return Report::Good();
 }
 
 
 Report MCP::wSetDefaultEditor(const strview editor) {
-    Report rep;
-    auto pair = m_toml->table.insert_or_assign(P_CFG_EDITOR, editor);
-    if (pair.second == false) rep.addComplain("Default editor was already set.");
-    return rep.Good();
+    m_toml->table.insert_or_assign(P_CFG_EDITOR, std::string{editor});
+    return Report::Good();
 }
 
 Report MCP::wAddProfile(const Profile& prof) {
@@ -109,13 +105,22 @@ Report MCP::wAddProfile(const Profile& prof) {
     entry.insert(PP_EXTERNAL, prof.is_ext);
     entry.insert(PP_REPO_URL, prof.repo_url);
 
-    // Inert profiles array if it doesn't exist yet
-    if (!m_toml->table[P_PROFILES].as_array()) {
-        m_toml->table.insert(P_PROFILES, toml::array{});
+    auto* arr = m_toml->table[P_PROFILES].as_array();
+    if (!arr) {
+        m_toml->table.insert_or_assign(P_PROFILES, toml::array{});
+        arr = m_toml->table[P_PROFILES].as_array();
+        if (!arr) return Report::Bad("Could not create profiles array in master config");
     }
-    // push new profile entry to profiles array
-    m_toml->table[P_PROFILES].as_array()->push_back(entry);
 
+    for (auto& node : *arr) {
+        auto* tbl = node.as_table();
+        if (!tbl) continue;
+        if ((*tbl)[PP_NAME].value_or(std::string{}) == prof.name) {
+            return Report::Bad("Profile '{}' already exists in master config", prof.name);
+        }
+    }
+
+    arr->push_back(std::move(entry));
     return Report::Good();
 }
 
@@ -126,9 +131,15 @@ Report MCP::wRemoveProfile(const strview name) {
         return Report::Bad("Profiles array is empty");
     }
 
-    for (uint32 i=0;  i < arr_profiles->size();  ++i) {
-        if (arr_profiles->at(i).at_path(PP_NAME) == name) {
-            arr_profiles->erase(arr_profiles->begin() + i);
+    const std::string want{name};
+    for (uint32 i = 0; i < arr_profiles->size(); ++i) {
+        toml::table* tbl = arr_profiles->at(i).as_table();
+        if (!tbl) continue;
+        const std::string have = (*tbl)[PP_NAME].value_or(std::string{});
+        if (have == want) {
+            auto it = arr_profiles->begin();
+            std::advance(it, static_cast<std::ptrdiff_t>(i));
+            arr_profiles->erase(it);
             return Report::Good();
         }
     }
@@ -138,8 +149,10 @@ Report MCP::wRemoveProfile(const strview name) {
 
 
 Report MCP::wSaveConfig(const fs::path& path) {
-    std::ofstream fo(path, std::ios::out);
+    std::ofstream fo(path, std::ios::out | std::ios::trunc);
     if (!fo) return Report::Bad("Couldn't open output file: '{}'", path.string());
     fo << m_toml->table;
+    fo.flush();
+    if (!fo) return Report::Bad("Couldn't write master config: '{}'", path.string());
     return Report::Good();
 }

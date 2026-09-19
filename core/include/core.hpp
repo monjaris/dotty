@@ -191,7 +191,7 @@ inline bool ensure_directories(const fs::path& dir_path) {
     return !ec;
 }
 
-// copy whole directory recursively. Returns false on failure (never throws).
+// copy src directory as dest (dest is created if missing). Never throws.
 inline bool copy_directory(const fs::path& src_d, const fs::path& dest_d, bool cp_if_src_is_newer=false) {
     std::error_code ec;
     fs::copy(src_d, dest_d,
@@ -199,6 +199,25 @@ inline bool copy_directory(const fs::path& src_d, const fs::path& dest_d, bool c
         fs::copy_options::update_existing : fs::copy_options::overwrite_existing),
         ec
     );
+    return !ec;
+}
+
+// Copy *contents* of src_d into dest_d (dest_d is created if missing).
+// Unlike copy_directory, this does not nest src's basename under dest.
+inline bool copy_directory_contents(const fs::path& src_d, const fs::path& dest_d, bool overwrite=true) {
+    std::error_code ec;
+    if (!fs::exists(src_d, ec) || !fs::is_directory(src_d, ec) || ec) return false;
+    fs::create_directories(dest_d, ec);
+    if (ec) return false;
+
+    auto opts = fs::copy_options::recursive |
+        (overwrite ? fs::copy_options::overwrite_existing : fs::copy_options::update_existing);
+
+    for (auto it = fs::directory_iterator(src_d, ec); !ec && it != fs::directory_iterator(); ++it) {
+        const fs::path dest = dest_d / it->path().filename();
+        fs::copy(it->path(), dest, opts, ec);
+        if (ec) return false;
+    }
     return !ec;
 }
 
@@ -340,6 +359,14 @@ std::string gh_host_from_url(const strview repo_url) {
     return std::string(path.substr(0, first_slash));
 }
 
+[[nodiscard]] inline
+std::string owner_repo_from_url(const strview repo_url) {
+    const std::string owner = gh_host_from_url(repo_url);
+    const std::string repo  = repo_from_url(repo_url);
+    if (owner == "[BAD-URL]" || repo == "[BAD-URL]") return "[BAD-URL]";
+    return std::format("{}/{}", owner, repo);
+}
+
 inline std::optional<std::string> active_github_account() {
     std::string gh_acc = {};
 
@@ -446,6 +473,7 @@ core::Report {
 
     void terminateOnBad() {
         if (this->error()) {
+            this->printComplains();
             core::terminate("Invalid action, terminating!");
         }
     }

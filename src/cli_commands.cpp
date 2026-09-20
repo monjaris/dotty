@@ -159,10 +159,7 @@ int32 CmdLine::do_update()
     Report apply = dotty.systemToRepo();
     apply.printOnBad();
 
-    Report exec_r = dotty.runExecCommands();
-    exec_r.printOnBad();
-
-    if (apply.error() || exec_r.error()) return EXIT_FAILURE;
+    if (apply.error()) return EXIT_FAILURE;
     return EXIT_SUCCESS;
 }
 
@@ -198,22 +195,22 @@ int32 CmdLine::do_push(const char* commit_message) {
         return EXIT_FAILURE;
     }
 
-    int32 add_rc = core::CmdStream {}
+    int32 add_ec = core::CmdStream {}
         .add("cd {}", core::shell_quote(repo_d.string()))
         .add("git add .")
     .run(true, false);
-    if (add_rc != 0) {
-        core::print("[Error] git add failed (exit ", add_rc, ")\n");
+    if (add_ec != 0) {
+        core::print("[Error] git add failed (exit ", add_ec, ")\n");
         return EXIT_FAILURE;
     }
 
-    // Empty commits are not an error - still push whatever is on the branch.
+    // Empty commits wont result in error
     const char* msg = (commit_message && commit_message[0]) ? commit_message : "dotty update";
-    int32 commit_rc = core::CmdStream {}
+    int32 commit_ec = core::CmdStream {}
         .add("cd {}", core::shell_quote(repo_d.string()))
         .add("git commit -m {}", core::shell_quote(msg))
     .run(true, false);
-    if (commit_rc != 0) {
+    if (commit_ec != 0) {
         core::print("Nothing new to commit (or commit failed); continuing with push.\n");
     }
 
@@ -275,14 +272,14 @@ int32 CmdLine::do_pull() {
     // Remove previous cache clone if any
     core::remove_path(cache_clone);
 
-    int32 clone_rc = core::CmdStream {}
+    int32 clone_ec = core::CmdStream {}
         .add("cd {}", core::shell_quote(cache_root.string()))
         .add("git clone {} {}",
              core::shell_quote(active_prof->repo_url),
              core::shell_quote(active_prof->name))
     .run(true, false);
 
-    if (clone_rc != 0) {
+    if (clone_ec != 0) {
         core::print("[Error] git clone failed for '", active_prof->repo_url, "'\n");
         return EXIT_FAILURE;
     }

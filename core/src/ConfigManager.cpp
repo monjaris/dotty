@@ -152,7 +152,7 @@ Report CM::newProfile(
         ? initial_commit_message
         : "Initial commit of this configuration profile";
 
-    int32 git_rc = core::CmdStream {}
+    int32 git_ec = core::CmdStream {}
         .add("cd {}", core::shell_quote(repo_d.string()))
         .add("git init")
         .add("touch .gitkeep")
@@ -163,11 +163,11 @@ Report CM::newProfile(
             core::shell_quote(repo_d.string()))
     .run(true, false);
 
-    if (git_rc != 0) {
+    if (git_ec != 0) {
         return Report::Bad(
             "{} '{}': git/gh pipeline failed (exit {}). "
             "Local directories were created; fix the remote and retry, or delete the profile.",
-            err, name, git_rc
+            err, name, git_ec
         );
     }
 

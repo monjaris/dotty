@@ -389,11 +389,18 @@ inline std::optional<std::string> active_github_account() {
 // tries Cloudfare(fallbacks to Quad9) DNS at always open port 53
 inline bool internet_is_connected(uint32 timeout_seconds = 2) {
     char cmd[64];
+
     // -z for scan only, -w for timeout seconds
+    // snprintf(cmd, sizeof(cmd),
+    //     "nc -zw%u 1.1.1.1 53 2>/dev/null||nc -zw%u 9.9.9.9 53 2>/dev/null",
+    //     timeout_seconds, timeout_seconds
+    // );
+
+    // ping is more likely to exist on a minimal machine so lets switch to that
     snprintf(cmd, sizeof(cmd),
-        "nc -zw%u 1.1.1.1 53 2>/dev/null||nc -zw%u 9.9.9.9 53 2>/dev/null",
-        timeout_seconds, timeout_seconds
+        "ping -c1 archlinux.org > /dev/null 2>&1"
     );
+
     return ::system(cmd) == 0;
 }
 

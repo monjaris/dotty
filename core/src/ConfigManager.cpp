@@ -626,7 +626,7 @@ Report CM::systemToRepo()
         core::ensure_directories(dest.parent_path());
         if (use_sudo) {
             int32 rc = core::CmdStream{}
-                .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
+                .add("sudo cp -r {}/. {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
             .run(false, false, true);
             if (rc != 0) {
                 report.addComplain("sudo cp -r failed for '{}'", src.string());
@@ -647,7 +647,7 @@ Report CM::systemToRepo()
         core::ensure_directories(dest.parent_path());
         if (use_sudo) {
             int32 rc = core::CmdStream{}
-                .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
+                .add("sudo cp -r {}/. {}", core::shell_quote(src.string()), core::shell_quote(dest.string()))
                 .add("sudo rm -rf {}", core::shell_quote(src.string()))
                 .add("sudo ln -s {} {}", core::shell_quote(dest.string()), core::shell_quote(src.string()))
             .run(true, false, true);

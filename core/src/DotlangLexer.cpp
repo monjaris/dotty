@@ -74,7 +74,7 @@ LexRes DL::lexString() {
 }
 
 
-// Single-quoted string — required by @exec 'command here'
+// Single-quoted string - required by @exec 'command here'
 LexRes DL::lexSingleString() {
     m_step(); // skip opening '
     std::string str;
@@ -257,7 +257,7 @@ Report DL::lexMain() {
                 report.addComplain("Couldn't lex double-quoted string"); continue;
             }
         }
-        // Lex STRING (single-quoted) — used by @exec
+        // Lex STRING (single-quoted) - used by @exec
         else if (m_seek() == '\'') {
             auto lex = lexSingleString();
             if (lex.success()) {

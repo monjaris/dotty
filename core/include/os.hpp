@@ -134,7 +134,7 @@ inline bool in_path(const char* name) {
 }
 
 // load $HOME to static constant once and return it.
-// Returns empty string (never throws) when HOME is unset — callers must check.
+// Returns empty string (never throws) when HOME is unset - callers must check.
 inline const char* userHomePath() {
     static const char* home_path_cache = nullptr;
     if (home_path_cache != nullptr) return home_path_cache;
@@ -183,7 +183,7 @@ inline fs::path get_config_d() {
 }
 
 
-// get system editor with nice fallbacks — never returns nullptr
+// get system editor with nice fallbacks - never returns nullptr
 // (callers pass this into std::string / value_or; nullptr is UB there)
 inline const char* get_txt_editor() {
     static const char* text_editor = nullptr;

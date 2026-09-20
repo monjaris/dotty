@@ -246,7 +246,7 @@ ParseReport DP::parseMain()
     // lines enable actions on later lines when tokens are concatenated,
     // and also lets per-line callers keep state across lines if they want.
 
-    // Optional leading directive(s) — may appear anywhere in the token stream
+    // Optional leading directive(s) - may appear anywhere in the token stream
     // as long as they come before the action that needs them.
     while (m_checks() && m_get().type == Token::DIRECTIVE) {
         auto dr = m_parseDirectives();

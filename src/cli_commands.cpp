@@ -13,7 +13,7 @@ int32 CmdLine::do_init() {
         return EXIT_FAILURE;
     }
 
-    // Soft dependency checks (warnings only — init itself does not need gh/internet)
+    // Soft dependency checks (warnings only - init itself does not need gh/internet)
     if (!core::os::in_path("gh")) {
         core::print(
             "[Warning] runtime-dependency '\033[31mgithub-cli\033[0m' is not installed.\n"
@@ -43,7 +43,7 @@ int32 CmdLine::do_init() {
             "Reset master config and re-initialize?",
             false
         )) {
-            core::print("Init aborted — existing configuration kept.\n");
+            core::print("Init aborted - existing configuration kept.\n");
             return EXIT_FAILURE;
         }
         if (!core::empty_file(master)) {
@@ -78,7 +78,7 @@ int32 CmdLine::do_init() {
     core::print("  config dir : ", dotty.config_d.string(), "\n");
     core::print("  data dir   : ", dotty.data_d.string(), "\n");
     core::print("  master cfg : ", master.string(), "\n");
-    core::print("\nNext step — create a profile:\n");
+    core::print("\nNext step - create a profile:\n");
     core::print("  dotty profile new --name main --repo my-dotfiles --commit-msg \"init\"\n");
     return EXIT_SUCCESS;
 }
@@ -207,7 +207,7 @@ int32 CmdLine::do_push(const char* commit_message) {
         return EXIT_FAILURE;
     }
 
-    // Empty commits are not an error — still push whatever is on the branch.
+    // Empty commits are not an error - still push whatever is on the branch.
     const char* msg = (commit_message && commit_message[0]) ? commit_message : "dotty update";
     int32 commit_rc = core::CmdStream {}
         .add("cd {}", core::shell_quote(repo_d.string()))

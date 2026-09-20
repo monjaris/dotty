@@ -2,7 +2,7 @@
 #include "DotlangLexer.hpp"
 
 /*
- * Parser for dotlang — DSL for dotty config mappings and actions.
+ * Parser for dotlang - DSL for dotty config mappings and actions.
  *
  * Language specification:
  *   comment lines start with '#' (except "#!" directives)

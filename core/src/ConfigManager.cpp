@@ -456,10 +456,10 @@ Report CM::load(bool reg) {
         core::ensure_directories(data_d / prof.name / data_cfgref);
     }
 
-    // Master config may not exist yet (fresh init) — that is fine.
+    // Master config may not exist yet (fresh init) - that is fine.
     std::error_code ec;
     if (!fs::exists(master_path, ec) || core::is_file_empty(master_path)) {
-        core::debug("Master config missing or empty — no profiles loaded yet.\n");
+        core::debug("Master config missing or empty - no profiles loaded yet.\n");
         m_profiles.clear();
         m_current_profile = Profile{Profile::NOT, "", false, false};
         return Report::Good();
@@ -476,7 +476,7 @@ Report CM::load(bool reg) {
 
     m_profiles = mcparser.profiles;
 
-    // Set active profile directly — avoid re-entrant setActiveProfile() during load.
+    // Set active profile directly - avoid re-entrant setActiveProfile() during load.
     auto it = mcparser.vars.find(MasterConfigParser::P_ACTIVE_PROF);
     if (it != mcparser.vars.end() && it->second != Profile::NOT) {
         if (Profile* found = getProfileByName(it->second)) {
@@ -559,7 +559,7 @@ Report CM::systemToRepo()
     bool have_sudo_targets = !sudo_files_to_copy.empty() || !sudo_files_to_link.empty()
                            || !sudo_dirs_to_copy.empty()  || !sudo_dirs_to_link.empty();
     if (have_sudo_targets) {
-        core::print("This profile has @sudo entries — you may be asked for your password.\n");
+        core::print("This profile has @sudo entries - you may be asked for your password.\n");
         core::CmdStream{}.add("sudo -v").run(false, false, true);
     }
 
@@ -724,7 +724,7 @@ Report CM::repoToSystem()
         !sudo_dirs_to_copy.empty()  || !sudo_dirs_to_link.empty()
     );
     if (have_sudo_targets) {
-        core::print("This profile has @sudo entries — you may be asked for your password.\n");
+        core::print("This profile has @sudo entries - you may be asked for your password.\n");
         core::CmdStream{}.add("sudo -v").run(false, false, true);
     }
 

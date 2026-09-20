@@ -174,7 +174,7 @@ void test_sudo_state_resets_between_parseMain_calls() {
     p.parseMain();
     CHECK(p.sudo_copy_files.size() == 1, "reset check: first parseMain populates sudo_copy_files");
 
-    // Without reset, enable flag still on — but plain mapping is not sudo
+    // Without reset, enable flag still on - but plain mapping is not sudo
     auto tokens2 = lex_line("\"/etc/vimrc\" >> \"vimrc\"");
     p.feed((tokens2));
     p.parseMain();

@@ -22,7 +22,7 @@ Before building and using `dotty`, ensure you have the following installed:
 
 ## Installation
 
-### Dotty is available in AUR
+### Available in AUR
 ```bash
 yay -S dotty
 # paru -S dotty   # if you use paru
@@ -39,14 +39,12 @@ yay -S dotty
 
 2. You can build dotty with xmake:
    ```bash
-   ./build.sh   # calls xmake, if you dont want to install xmake see the line below
-   # make   # use pregenerated Makefile
+   ./build.sh   # calls xmake under the hood
    ```
 
 3. Install the binary:
    ```bash
    xmake install
-   # make install   # or `make install` if you use makefile
    ```
 
 

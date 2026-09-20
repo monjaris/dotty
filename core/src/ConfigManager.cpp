@@ -786,7 +786,7 @@ Report CM::repoToSystem()
         core::ensure_directories(target.parent_path());
         if (use_sudo) {
             int32 rc = core::CmdStream{}
-                .add("sudo cp -r {} {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
+                .add("sudo cp -r {}/. {}", core::shell_quote(src.string()), core::shell_quote(target.string()))
             .run(false, false, true);
             if (rc != 0) report.addComplain("sudo cp -r failed for '{}'", src.string());
             else core::print("  [sudo-copy-dir] ", src.string(), " -> ", target.string(), "\n");

@@ -14,14 +14,14 @@ struct CmdLine
 
     // arg-fmt: "master" or "master,storage"
     // int32 do_clean(const strview options);
-    int32 do_init();
     int32 do_update();
     int32 do_push(const char* commit_message);
-    int32 do_pull();
+    int32 do_pull(bool confirm_overwrite = true);
     int32 do_config(strview options, const strview editor);
     int32 do_profile_(strview options);
         int32 do_p_list(const strview options);
         int32 do_p_new(const std::string& name, const std::string& repo, bool pub, const std::string& com_msg);
+        int32 do_p_import(const std::string& name, const std::string& repo_url);
         int32 do_p_delete(const std::string& options);
         int32 do_p_switch(const std::string& profile_name);
 

@@ -52,6 +52,8 @@ public:
         const std::string& repo_name, bool is_public,
         bool is_external, const char* const initial_commit_message
     );
+    // Register an existing repository without taking ownership of its remote.
+    Report importProfile(const std::string& name, const std::string& repo_url);
     Report deleteProfile(const strview profile_name);
     Report setActiveProfile(const strview name);
     Report listProfiles(bool name, bool repo, bool url, bool gh);

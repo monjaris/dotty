@@ -1,90 +1,6 @@
 #include "cli.hpp"
 #include "CmdStream.hpp"
 
-int32 CmdLine::do_init() {
-    // Init only bootstraps local directories and an empty master config.
-    // Profile creation is explicit via `dotty profile new`.
-
-    if (dotty.HOME.empty()) {
-        core::print(
-            "[Error] HOME environment variable is not set.\n"
-            "Cannot initialize dotty without a home directory.\n"
-        );
-        return EXIT_FAILURE;
-    }
-
-    // Soft dependency checks (warnings only - init itself does not need gh/internet)
-    if (!core::os::in_path("gh")) {
-        core::print(
-            "[Warning] runtime-dependency '\033[31mgithub-cli\033[0m' is not installed.\n"
-            "You will need it later for `dotty profile new` / push / pull.\n"
-        );
-    }
-    if (!core::os::in_path(core::PPRINTER)) {
-        core::print(
-            "[Warning] optional dependency '\033[31m", core::PPRINTER, "\033[0m' is not installed.\n"
-        );
-    }
-
-    if (!core::ensure_directories(dotty.config_d)) {
-        core::print("[Error] Could not create config directory: ", dotty.config_d.string(), "\n");
-        return EXIT_FAILURE;
-    }
-    if (!core::ensure_directories(dotty.data_d)) {
-        core::print("[Error] Could not create data directory: ", dotty.data_d.string(), "\n");
-        return EXIT_FAILURE;
-    }
-
-    const fs::path master = dotty.HOME / dotty.master_src;
-    std::error_code ec;
-    if (fs::exists(master, ec) && !core::is_file_empty(master)) {
-        if (!core::ask_confirm(
-            "dotty is already initialized (master config exists).\n"
-            "Reset master config and re-initialize?",
-            false
-        )) {
-            core::print("Init aborted - existing configuration kept.\n");
-            return EXIT_FAILURE;
-        }
-        if (!core::empty_file(master)) {
-            core::print("[Error] Could not reset master config: ", master.string(), "\n");
-            return EXIT_FAILURE;
-        }
-        std::ofstream fo(master, std::ios::out | std::ios::trunc);
-        if (!fo) {
-            core::print("[Error] Could not rewrite master config: ", master.string(), "\n");
-            return EXIT_FAILURE;
-        }
-        fo << "# dotty master configuration\n"
-           << "active-profile = \"[NIL-PROFILE]\"\n"
-           << "config-editor = \"\"\n"
-           << "profile = []\n";
-        core::print("Reset '", master.string(), "'\n");
-    } else {
-        // Write a minimal valid master skeleton so later parse does not fail.
-        std::ofstream fo(master, std::ios::out | std::ios::trunc);
-        if (!fo) {
-            core::print("[Error] Could not create master config: ", master.string(), "\n");
-            return EXIT_FAILURE;
-        }
-        fo << "# dotty master configuration\n"
-           << "active-profile = \"[NIL-PROFILE]\"\n"
-           << "config-editor = \"\"\n"
-           << "profile = []\n";
-        fo.close();
-    }
-
-    core::print("dotty initialized.\n");
-    core::print("  config dir : ", dotty.config_d.string(), "\n");
-    core::print("  data dir   : ", dotty.data_d.string(), "\n");
-    core::print("  master cfg : ", master.string(), "\n");
-    core::print("\nNext step - create a profile:\n");
-    core::print("  dotty profile new --name main --repo my-dotfiles --commit-msg \"init\"\n");
-    return EXIT_SUCCESS;
-}
-
-
-
 // int32 CmdLine::do_clean(strview option) {
 //     // {master, config, storage} toggle bytes
 //     bool c, s = false; c = s;
@@ -170,11 +86,6 @@ int32 CmdLine::do_push(const char* commit_message) {
         core::print("To push a profile, first set an active profile\n");
         return EXIT_FAILURE;
     }
-    if (!core::internet_is_connected()) {
-        core::print("Push operation requires an internet connection\n");
-        return EXIT_FAILURE;
-    }
-
     const std::string active = dotty.activeProf();
     const fs::path cfg_src  = dotty.config_d / active;
     const fs::path data_dst = dotty.data_d / active / dotty.data_cfgref;
@@ -230,17 +141,12 @@ int32 CmdLine::do_push(const char* commit_message) {
 
 
 
-int32 CmdLine::do_pull() {
+int32 CmdLine::do_pull(bool confirm_overwrite) {
     if (dotty.activeProf() == Profile::NOT || dotty.noProfilesExist()) {
         core::print("Pull operation requires an active profile to be set\n");
         return EXIT_FAILURE;
     }
-    if (!core::internet_is_connected()) {
-        core::print("Pull operation requires an internet connection\n");
-        return EXIT_FAILURE;
-    }
-
-    if (!core::ask_confirm("You are about to overwrite your current profile files. Continue?")) {
+    if (confirm_overwrite && !core::ask_confirm("You are about to overwrite your current profile files. Continue?")) {
         core::print("Pull aborted.\n");
         return EXIT_FAILURE;
     }
@@ -284,8 +190,20 @@ int32 CmdLine::do_pull() {
         return EXIT_FAILURE;
     }
 
+    // A repository without the stored profile configuration cannot be applied.
+    // Verify it before replacing the current local copy.
+    const fs::path cached_cfg = cache_clone / dotty.data_cfgref / dotty.config_src;
+    std::error_code ec;
+    if (!fs::is_regular_file(cached_cfg, ec) || ec) {
+        core::print("[Error] Repository is not a dotty profile (missing ", cached_cfg.string(), ")\n");
+        return EXIT_FAILURE;
+    }
+
     // Replace local data dir with cloned content
-    core::remove_path(dotty.data_d / active_prof->name);
+    if (!core::remove_path(dotty.data_d / active_prof->name)) {
+        core::print("[Error] Failed to replace local profile data\n");
+        return EXIT_FAILURE;
+    }
     if (!core::ensure_directories(dotty.data_d / active_prof->name) ||
         !core::copy_directory_contents(cache_clone, dotty.data_d / active_prof->name)) {
         core::print("[Error] Failed to copy clone into data directory\n");
@@ -293,14 +211,17 @@ int32 CmdLine::do_pull() {
     }
 
     // Restore config references from .dotty.d back to the config directory
-    std::error_code ec;
     const fs::path cfgref = dotty.data_d / active_prof->name / dotty.data_cfgref;
     if (fs::exists(cfgref, ec) && fs::is_directory(cfgref, ec)) {
-        core::ensure_directories(active_config_d);
-        if (!core::copy_directory_contents(cfgref, fs::path(active_config_d))) {
-            core::print("[Warning] Failed to restore config reference directory\n");
+        if (!core::ensure_directories(active_config_d) ||
+            !core::copy_directory_contents(cfgref, fs::path(active_config_d))) {
+            core::print("[Error] Failed to restore config reference directory\n");
+            return EXIT_FAILURE;
         }
-        core::remove_path(cfgref);
+        if (!core::remove_path(cfgref)) {
+            core::print("[Error] Failed to remove restored config reference directory\n");
+            return EXIT_FAILURE;
+        }
     }
 
     // Re-parse the restored config so mappings/exec are available for repoToSystem
@@ -320,7 +241,12 @@ int32 CmdLine::do_pull() {
                 all_tokens.insert(all_tokens.end(), toks.begin(), toks.end());
             }
             parser.feed(std::move(all_tokens));
-            parser.parseMain().printComplains();
+            ParseReport parsed = parser.parseMain();
+            parsed.printComplains();
+            if (parsed.error()) {
+                core::print("[Error] Imported profile configuration is invalid; nothing was applied.\n");
+                return EXIT_FAILURE;
+            }
 
             dotty.files_to_copy      = std::move(parser.copy_files);
             dotty.files_to_link      = std::move(parser.link_files);
@@ -482,6 +408,71 @@ int32 CmdLine::do_p_new(
 }
 
 
+int32 CmdLine::do_p_import(const std::string& name, const std::string& repo_url) {
+    if (auto valid = dotty.validateProfileName(name); valid.error()) {
+        valid.printOnBad();
+        return EXIT_FAILURE;
+    }
+    if (repo_url.empty()) {
+        core::print("[Error] Repository URL can't be empty.\n");
+        return EXIT_FAILURE;
+    }
+    if (dotty.profileExists(name)) {
+        core::print("[Error] Profile '", name, "' already exists.\n");
+        return EXIT_FAILURE;
+    }
+    if (dotty.HOME.empty()) {
+        core::print("[Error] Can't import a profile because HOME is not set.\n");
+        return EXIT_FAILURE;
+    }
+    if (!core::os::in_path("git")) {
+        core::print("[Error] Importing a profile requires git.\n");
+        return EXIT_FAILURE;
+    }
+
+    // Clone and validate the saved profile config before registering anything
+    // locally. A mistyped, private, or non-dotty repository must not leave a
+    // ghost profile in the user's master config.
+    const fs::path cache_root = dotty.HOME / ".cache" / "dotty";
+    const fs::path cache_clone = cache_root / name;
+    if (!core::ensure_directories(cache_root)) {
+        core::print("[Error] Couldn't create import cache: ", cache_root.string(), "\n");
+        return EXIT_FAILURE;
+    }
+    if (!core::remove_path(cache_clone)) {
+        core::print("[Error] Couldn't clear previous import cache: ", cache_clone.string(), "\n");
+        return EXIT_FAILURE;
+    }
+    const int32 remote_check = core::CmdStream{}
+        .add("cd {}", core::shell_quote(cache_root.string()))
+        .add("git clone {} {}", core::shell_quote(repo_url), core::shell_quote(name))
+    .run(true, false);
+    if (remote_check != 0) {
+        core::print("[Error] Couldn't access profile repository '", repo_url, "'.\n");
+        return EXIT_FAILURE;
+    }
+    std::error_code ec;
+    const fs::path cached_config = cache_clone / dotty.data_cfgref / dotty.config_src;
+    if (!fs::is_regular_file(cached_config, ec) || ec) {
+        core::print("[Error] Repository is not a dotty profile (missing ", cached_config.string(), ")\n");
+        return EXIT_FAILURE;
+    }
+
+    Report imported = dotty.importProfile(name, repo_url);
+    if (imported.error()) {
+        imported.printOnBad();
+        return EXIT_FAILURE;
+    }
+
+    core::print("Importing profile '", name, "' and applying it on this machine...\n");
+    const int32 result = do_pull(false);
+    if (result != EXIT_SUCCESS) {
+        core::print("[Warning] Profile was registered, but could not be fully applied. Retry with: dotty pull\n");
+    }
+    return result;
+}
+
+
 
 int32 CmdLine::do_p_delete(const std::string& profile_name) {
     if (dotty.noProfilesExist()) {
@@ -497,15 +488,16 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
         return EXIT_FAILURE;
     }
 
-    const std::string repo_url = prof->repo_url;
+    const Profile profile = *prof;
+    const std::string repo_url = profile.repo_url;
     const std::string owner_repo = core::owner_repo_from_url(repo_url);
     const bool was_active = (dotty.activeProf() == profile_name);
 
     if (!core::ask_confirm(
         std::format(
-            "Delete profile '{}'?\n"
-            "  This removes local config/data and (if possible) GitHub repo '{}'.",
-            profile_name, owner_repo
+            "Remove profile '{}' from dotty?\n"
+            "  Local files and any owned remote repository are handled separately.",
+            profile_name
         ),
         false
     )) {
@@ -521,30 +513,37 @@ int32 CmdLine::do_p_delete(const std::string& profile_name) {
         return EXIT_FAILURE;
     }
 
-    // 2. Remove local directories
-    core::print("Deleting profile files and directories...\n");
-    std::error_code fs_err;
-    fs::remove_all(dotty.config_d / profile_name, fs_err);
-    if (fs_err) {
-        core::print("[Warning] Could not fully remove config dir: ", fs_err.message(), "\n");
-    }
-    fs_err.clear();
-    fs::remove_all(dotty.data_d / profile_name, fs_err);
-    if (fs_err) {
-        core::print("[Warning] Could not fully remove data dir: ", fs_err.message(), "\n");
+    // 2. Always ask about local cleanup independently of the remote. This
+    // prompt is reached even when the remote was deleted, is unavailable, or
+    // never existed.
+    if (core::ask_confirm("Also delete this profile's local config and stored data?", true)) {
+        core::print("Deleting local profile files and directories...\n");
+        std::error_code fs_err;
+        fs::remove_all(dotty.config_d / profile_name, fs_err);
+        if (fs_err) core::print("[Warning] Could not fully remove config dir: ", fs_err.message(), "\n");
+        fs_err.clear();
+        fs::remove_all(dotty.data_d / profile_name, fs_err);
+        if (fs_err) core::print("[Warning] Could not fully remove data dir: ", fs_err.message(), "\n");
+    } else {
+        core::print("Kept local profile files and data.\n");
     }
 
-    // 3. Delete GitHub repo (non-fatal if it fails)
-    if (owner_repo != "[BAD-URL]" && core::os::in_path("gh") && core::internet_is_connected()) {
-        int32 repo_deletion_failed = core::CmdStream{}
+    // 3. Imported profiles are never ours to delete remotely. For profiles
+    // created by this machine, make remote deletion an explicit choice.
+    if (profile.is_ext) {
+        core::print("Left imported repository '", repo_url, "' untouched.\n");
+    } else if (owner_repo == "[BAD-URL]") {
+        core::print("[Warning] Couldn't identify a GitHub repository to delete.\n");
+    } else if (!core::os::in_path("gh")) {
+        core::print("[Warning] GitHub CLI is unavailable; remote repository was left untouched.\n");
+    } else if (core::ask_confirm(
+        std::format("Also permanently delete the owned GitHub repository '{}' ?", owner_repo), false
+    )) {
+        const int32 repo_deletion_failed = core::CmdStream{}
             .add("gh repo delete {} --yes", core::shell_quote(owner_repo))
         .run(false, false, true);
-
         if (repo_deletion_failed) {
-            core::print(
-                "[Warning] Couldn't delete GitHub repo '", owner_repo,
-                "'. Local profile was still removed.\n"
-            );
+            core::print("[Warning] Couldn't delete GitHub repo '", owner_repo, "'.\n");
         }
     }
 

@@ -272,13 +272,14 @@ ParseReport DP::parseMain()
 
         // @action ...
         if (m_get().type == Token::ACTION) {
-            if (auto ar = m_parseAction(); ar.matched) {
-                if (ar.error()) report.addComplain("{}", ar.m_msg);
+            auto ar = m_parseAction();
+            if (ar.error()) report.addComplain("{}", ar.m_msg);
+            if (ar.matched) {
                 continue;
             }
-            // matched=false after ACTION means error already recorded
+            // The action was consumed, but its required directive or payload
+            // was invalid. Skip its remaining token(s) and continue parsing.
             if (!m_checks()) break;
-            // skip the rest of a bad action line
             m_advance();
             continue;
         }

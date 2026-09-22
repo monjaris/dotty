@@ -52,20 +52,27 @@ yay -S dotty
 ## Usage
 
 
-### 1. Initialization
+### 1. Create a profile
 
-To set up `dotty` for the first time:
+There is no separate initialization step. Creating or importing a profile creates
+Dotty's local directories and master configuration automatically.
+
+Create a new GitHub-backed profile on this machine:
 
 ```bash
-dotty init
+dotty profile new --name main --repo my-dotfiles --commit-msg "Initial dotfiles"
 ```
 
-This command will:
-- Check for GitHub authentication.
-- Prompt for a repository name and visibility.
-- Initialize a local git repository in `~/.local/share/dotty/<profile-name>`.
-- Create a corresponding repository on GitHub and push the initial commit.
+On another machine, import the existing repository and apply all of its mappings
+in one command (GitHub CLI authentication is not required for a public repo):
 
+```bash
+dotty profile import --name main --url https://github.com/you/my-dotfiles
+```
+
+Imported profiles never delete their remote repository. The command validates the
+remote before it changes local Dotty configuration, then downloads the repository,
+restores its profile config, and applies it.
 
 ### 2. Configuration
 
@@ -109,9 +116,9 @@ Pull your configs and apply so we can acquire them on another machine or to roll
 dotty pull
 ```
 
-Dotty supports multiple profiles. to create one:
+Dotty supports multiple profiles. To create another one:
 ```bash
-dotty profile new terminal-configs # dotty p n terminal-configs
+dotty profile new --name terminal-configs --repo terminal-configs --commit-msg "Initial configs" # dotty p n
 ```
 
 You can switch between them

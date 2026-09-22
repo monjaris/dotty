@@ -26,6 +26,8 @@ struct CmdLine::Impl {
             std::string new_repo_name  = {};
             bool new_repo_pub          = {};
             std::string new_commit_msg = {};
+        std::string import_prof_name   = {};
+            std::string import_repo_url = {};
         std::string delete_profile     = {};
         std::string switch_profile     = {};
     } v;
@@ -74,11 +76,6 @@ int32 CmdLine::setup()
 {
     using SubCmd = CLI::App;
 
-    SubCmd* sc_init = newSubCmd(&APP, {"init"},
-        BIND(do_init()),
-        "Initialize dotty config manager in your system", true, {0,0}, {0,0}
-    );
-    //
     SubCmd* sc_update = newSubCmd(&APP, {"update", "u"},
         BIND(do_update()),
         "Write configs to configs storage", false, {0,0}, {0,0}
@@ -126,6 +123,14 @@ int32 CmdLine::setup()
             ssc_new->add_flag("--public", impl->v.new_repo_pub, "New repo's publicity status");
         ;
     //
+        SubCmd* ssc_import = newSubCmd(sc_profile_, {"import", "i"},
+            BIND(do_p_import(impl->v.import_prof_name, impl->v.import_repo_url)),
+            "Download an existing profile and apply it on this machine", true, {2,2}, {0,0}
+        ); ssc_import
+            ->add_option("--name,-n", impl->v.import_prof_name, "Local name for the imported profile")->required();
+            ssc_import->add_option("--url,-u", impl->v.import_repo_url, "Git repository URL to import")->required();
+        ;
+    //
         SubCmd* ssc_delete = newSubCmd(sc_profile_, {"delete", "d"},
             BIND(do_p_delete(impl->v.delete_profile)),
             "Delete a profile", true, {1,1}, {0,0}
@@ -167,8 +172,8 @@ int32 CmdLine::run()
 
     std::string active_p = Profile::NOT;
     if (auto load_rep = dotty.load(true); load_rep.error()) {
-        // Non-fatal on first run (no master config yet) - print and continue
-        // so `dotty init` can still be invoked.
+        // A fresh machine has no master config yet. Profile commands create it
+        // when needed, so this is informational rather than fatal.
         load_rep.printComplains();
     }
     active_p = dotty.activeProf();
@@ -198,4 +203,3 @@ int32 CmdLine::run()
 
     return EXIT_SUCCESS;
 }
-

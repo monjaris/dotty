@@ -4,6 +4,28 @@
 
 using CM = ConfigManager;
 
+namespace {
+
+Report ensureMasterConfig(const fs::path& master_path) {
+    std::error_code ec;
+    if (fs::exists(master_path, ec) && !core::is_file_empty(master_path)) {
+        return Report::Good();
+    }
+    if (ec) {
+        return Report::Bad("Couldn't inspect master config '{}': {}", master_path.string(), ec.message());
+    }
+
+    std::ofstream fo(master_path, std::ios::out | std::ios::trunc);
+    if (!fo) return Report::Bad("Couldn't create master config '{}'", master_path.string());
+    fo << "active-profile = \"[NIL-PROFILE]\"\n"
+       << "config-editor = \"\"\n"
+       << "profile = []\n";
+    if (!fo) return Report::Bad("Couldn't write master config '{}'", master_path.string());
+    return Report::Good();
+}
+
+}
+
 CM::ConfigManager()
     : HOME([&]() -> fs::path {
           const char* h = core::os::userHomePath();
@@ -14,7 +36,7 @@ CM::ConfigManager()
     , data_d()
 {
     if (HOME.empty()) {
-        // Leave paths empty; load()/init will report a clear error.
+        // Leave paths empty; commands that need storage report a clear error.
         return;
     }
     // Prefer XDG_CONFIG_HOME when set; otherwise ~/.config/dotty
@@ -127,14 +149,7 @@ Report CM::newProfile(
     }
 
     const fs::path master_path = HOME / master_src;
-    if (!fs::exists(master_path, ec) || core::is_file_empty(master_path)) {
-        std::ofstream fo(master_path, std::ios::out | std::ios::trunc);
-        if (!fo) return Report::Bad("Couldn't create master config '{}'", master_path.string());
-        fo << "active-profile = \"[NIL-PROFILE]\"\n"
-           << "config-editor = \"\"\n"
-           << "profile = []\n";
-        if (!fo) return Report::Bad("Couldn't write master config '{}'", master_path.string());
-    }
+    if (auto master = ensureMasterConfig(master_path); master.error()) return master;
 
     const fs::path repo_d = data_d / name;
     if (!core::ensure_directories(repo_d / data_cfgref)) {
@@ -193,6 +208,40 @@ Report CM::newProfile(
     if (auto rel = reloadConfig(); rel.error()) {
         rel.printComplains();
     }
+    return Report::Good();
+}
+
+
+Report CM::importProfile(const std::string& name, const std::string& repo_url) {
+    static COMPTIME_STR err = "Can't import profile";
+
+    if (auto v = validateProfileName(name); v.error()) return v;
+    if (repo_url.empty()) return Report::Bad("{}: repository URL can't be empty", err);
+    if (profileExists(name)) return Report::Bad("{} '{}': Profile already exists.", err, name);
+    if (HOME.empty()) return Report::Bad("{}: HOME is not set", err);
+
+    std::error_code ec;
+    fs::create_directories(config_d / name, ec);
+    if (ec) {
+        return Report::Bad("Couldn't create config directory '{}': {}", (config_d / name).string(), ec.message());
+    }
+    fs::create_directories(data_d / name, ec);
+    if (ec) {
+        return Report::Bad("Couldn't create data directory '{}': {}", (data_d / name).string(), ec.message());
+    }
+
+    const fs::path master_path = HOME / master_src;
+    if (auto master = ensureMasterConfig(master_path); master.error()) return master;
+
+    MasterConfigParser master_cfman;
+    if (auto parse = master_cfman.rParse(master_path); parse.error()) {
+        return Report::Bad("{}: failed to parse master config: {}", err, parse.m_msg);
+    }
+    if (auto add = master_cfman.wAddProfile(Profile{name, repo_url, false, true}); add.error()) return add;
+    if (auto activate = master_cfman.wActivateProfile(name); activate.error()) return activate;
+    if (auto save = master_cfman.wSaveConfig(master_path); save.error()) return save;
+
+    if (auto reload = reloadConfig(); reload.error()) return reload;
     return Report::Good();
 }
 

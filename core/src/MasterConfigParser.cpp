@@ -42,7 +42,7 @@ Report MCP::rEval()
     );
 
     auto* arr_profiles = m_toml->table[P_PROFILES].as_array();
-    // Empty or missing profiles array is valid after a fresh `dotty init`.
+    // Empty or missing profiles array is valid before a first profile exists.
     if (!arr_profiles) {
         return Report::Good();
     }

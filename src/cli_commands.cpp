@@ -201,7 +201,7 @@ int32 CmdLine::do_pull(bool confirm_overwrite) {
 
     // Replace local data dir with cloned content
     if (!core::remove_path(dotty.data_d / active_prof->name)) {
-        core::print("[Error] Failed to replace local profile data\n");
+        core::print("[Error] Failed to remove path: {}\n", dotty.data_d / active_prof->name);
         return EXIT_FAILURE;
     }
     if (!core::ensure_directories(dotty.data_d / active_prof->name) ||

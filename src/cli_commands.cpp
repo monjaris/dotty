@@ -296,10 +296,7 @@ int32 CmdLine::do_config(strview what_cfg, const strview editor_name) {
                 editor = mcp.vars[mcp.P_CFG_EDITOR];
             }
             if (editor.empty()) {
-                editor = core::os::get_txt_editor();
-            }
-            if (editor.empty()) {
-                core::print("[Error] No editor found. Set EDITOR or pass -e.\n");
+                core::print("[Error] No editor found. Set $EDITOR or pass -e.\n");
                 return EXIT_FAILURE;
             }
             return core::CmdStream {}
